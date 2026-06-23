@@ -59,19 +59,18 @@ def _error_page(request: Request, status: int, title: str, message: str):
 @app.exception_handler(NotAuthorizedError)
 async def _not_authorized(request: Request, exc: NotAuthorizedError):
     return _error_page(
-        request, 403, "Access denied",
-        "You need administrator privileges to view that page.",
+        request, 403, "拒绝访问", "您需要管理员权限才能访问该页面。"
     )
 
 
 @app.exception_handler(PermissionDenied)
 async def _permission_denied(request: Request, exc: PermissionDenied):
-    return _error_page(request, 403, "Access denied", str(exc) or "Not allowed.")
+    return _error_page(request, 403, "拒绝访问", str(exc) or "没有权限。")
 
 
 @app.exception_handler(ExpenseError)
 async def _expense_error(request: Request, exc: ExpenseError):
-    return _error_page(request, 404, "Not found", str(exc) or "Record not found.")
+    return _error_page(request, 404, "未找到", str(exc) or "未找到该记录。")
 
 
 @app.get("/healthz")

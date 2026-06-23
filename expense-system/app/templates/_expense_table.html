@@ -2,9 +2,9 @@
 <table class="data-table">
   <thead><tr>
     <th>#</th>
-    {% if current_user.is_admin %}<th>Owner</th>{% endif %}
-    <th>Date</th><th>Vendor</th><th>Receipt #</th><th>Category</th>
-    <th class="num">Amount</th><th>Status</th>
+    {% if current_user.is_admin %}<th>提交人</th>{% endif %}
+    <th>日期</th><th>商户</th><th>发票号码</th><th>分类</th>
+    <th class="num">金额</th><th>状态</th>
   </tr></thead>
   <tbody>
   {% for e in items %}
@@ -16,10 +16,10 @@
       <td class="mono">{{ e.receipt_number or '—' }}</td>
       <td>{{ e.category or '—' }}</td>
       <td class="num">{{ e.amount | money }} {{ e.currency }}</td>
-      <td><span class="badge {{ e.status | status_class }}">{{ e.status.value }}</span></td>
+      <td><span class="badge {{ e.status | status_class }}">{{ e.status | status_label }}</span></td>
     </tr>
   {% else %}
-    <tr><td colspan="9" class="muted center">No records found.</td></tr>
+    <tr><td colspan="9" class="muted center">暂无记录。</td></tr>
   {% endfor %}
   </tbody>
 </table>

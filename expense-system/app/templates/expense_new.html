@@ -1,21 +1,20 @@
 {% extends "base.html" %}
-{% block title %}New record · {{ app_name }}{% endblock %}
+{% block title %}新建报销 · {{ app_name }}{% endblock %}
 {% block content %}
-<div class="page-head"><h1>New reimbursement</h1></div>
+<div class="page-head"><h1>新建报销</h1></div>
 
 <div class="card">
   <p class="muted">
-    Upload a receipt image. {% if llm_enabled %}The system will read it and
-    pre-fill the fields for you to review.{% else %}(Offline mode: you'll enter
-    the fields manually on the next step.){% endif %}
+    上传发票图片。{% if llm_enabled %}系统会自动识别并预填字段，供你核对。
+    {% else %}（离线模式：下一步请手动录入字段。）{% endif %}
   </p>
   <form method="post" action="/expenses/extract" enctype="multipart/form-data">
     <label class="dropzone" id="dropzone">
       <input type="file" name="file" id="fileInput" accept="image/*" required hidden>
-      <div id="dropText">📷 Click to choose a receipt image (JPG/PNG/WEBP/GIF)</div>
-      <img id="preview" alt="preview" hidden>
+      <div id="dropText">📷 点击选择发票图片（JPG/PNG/WEBP/GIF）</div>
+      <img id="preview" alt="预览" hidden>
     </label>
-    <button class="btn btn-primary" type="submit" id="submitBtn">Read receipt →</button>
+    <button class="btn btn-primary" type="submit" id="submitBtn">识别发票 →</button>
   </form>
 </div>
 {% endblock %}
@@ -32,7 +31,7 @@
     dropText.textContent = f.name;
   });
   document.querySelector('form').addEventListener('submit', () => {
-    document.getElementById('submitBtn').textContent = 'Reading…';
+    document.getElementById('submitBtn').textContent = '识别中…';
     document.getElementById('submitBtn').disabled = true;
   });
 </script>

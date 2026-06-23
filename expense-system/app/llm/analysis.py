@@ -107,6 +107,7 @@ Rules:
 - Dates are ISO strings; use substr(expense_date,1,7) for month grouping.
 - Always include a sensible LIMIT (<= {_MAX_DISPLAY_ROWS}) unless aggregating.
 - Respond with a JSON object: {{"sql": "...", "explanation": "..."}}.
+- Write the "explanation" value in Chinese.
 
 Question: {question}"""
     resp = client.chat.completions.create(
@@ -128,9 +129,9 @@ def _llm_summarize(client, model: str, question: str, columns, rows) -> str:
     sample = rows[:_MAX_SUMMARY_ROWS]
     payload = {"columns": columns, "rows": sample, "row_count": len(rows)}
     prompt = (
-        "Given this question and query result, write a concise, factual "
-        "analysis (2-4 sentences) citing concrete numbers. Do not invent data.\n\n"
-        f"Question: {question}\n\nResult JSON:\n{json.dumps(payload, default=str)}"
+        "根据下面的问题和查询结果，用中文写一段简洁、客观的分析（2-4 句），"
+        "并引用具体数字。不要编造数据。\n\n"
+        f"问题：{question}\n\n结果 JSON：\n{json.dumps(payload, default=str, ensure_ascii=False)}"
     )
     resp = client.chat.completions.create(
         model=model,
@@ -145,7 +146,7 @@ def _fallback(question: str, rows: list[dict]) -> AnalysisResult:
     totals: dict[str, dict[str, float]] = {}
     grand = 0.0
     for r in rows:
-        cat = r.get("category") or "Uncategorized"
+        cat = r.get("category") or "未分类"
         amt = float(r.get("amount") or 0)
         bucket = totals.setdefault(cat, {"count": 0, "total": 0.0})
         bucket["count"] += 1
@@ -155,16 +156,16 @@ def _fallback(question: str, rows: list[dict]) -> AnalysisResult:
     result_rows = [
         [cat, int(v["count"]), round(v["total"], 2)] for cat, v in table
     ]
-    top = table[0][0] if table else "n/a"
+    top = table[0][0] if table else "无"
     summary = (
-        f"Across {len(rows)} record(s) you have {grand:,.2f} in total spend. "
-        f"The largest category is {top}. "
-        "(Set LLM_API_KEY to enable free-form natural-language analysis.)"
+        f"共 {len(rows)} 条记录，合计金额 {grand:,.2f}。"
+        f"占比最高的分类是「{top}」。"
+        "（设置 LLM_API_KEY 后可使用自由文本的自然语言分析。）"
     )
     return AnalysisResult(
         question=question,
         used_llm=False,
-        columns=["category", "count", "total_amount"],
+        columns=["分类", "笔数", "合计金额"],
         rows=result_rows,
         summary=summary,
     )

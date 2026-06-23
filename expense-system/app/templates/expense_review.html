@@ -1,25 +1,24 @@
 {% extends "base.html" %}
-{% block title %}Review receipt · {{ app_name }}{% endblock %}
+{% block title %}核对发票 · {{ app_name }}{% endblock %}
 {% block content %}
-<div class="page-head"><h1>Review &amp; save</h1></div>
+<div class="page-head"><h1>核对并保存</h1></div>
 
 {% if data.llm_used %}
   <div class="alert alert-ok">
-    Fields read from your receipt
-    {% if data.confidence %}(confidence {{ (data.confidence * 100) | round }}%){% endif %}.
-    Please verify before saving.
+    已从发票中识别字段
+    {% if data.confidence %}（置信度 {{ (data.confidence * 100) | round }}%）{% endif %}，
+    请核对后保存。
   </div>
 {% endif %}
 
 {% if duplicate %}
   <div class="alert alert-error">
-    ⚠ <strong>Duplicate receipt number.</strong>
-    This receipt number is already on record
+    ⚠ <strong>发票号码重复。</strong>
+    该发票号码已存在
     {% if current_user.is_admin %}
-      (record #{{ duplicate.id }}, submitted by {{ duplicate.owner.username }},
-      status {{ duplicate.status.value }}){% endif %}.
-    Change or clear the number to continue — duplicates are blocked to prevent
-    double reimbursement.
+      （记录 #{{ duplicate.id }}，提交人 {{ duplicate.owner.username }}，
+      状态 {{ duplicate.status | status_label }}）{% endif %}。
+    请修改或清空号码后再继续——为防止重复报销，系统会拦截重复发票。
   </div>
 {% endif %}
 
@@ -29,26 +28,26 @@
       <input type="hidden" name="image_path" value="{{ image_filename or '' }}">
       <input type="hidden" name="raw" value="{{ raw or '' }}">
 
-      <label>Receipt number
+      <label>发票号码
         <input name="receipt_number" value="{{ data.receipt_number or '' }}"
                class="{{ 'input-error' if duplicate }}">
       </label>
       <div class="form-row">
-        <label>Date
+        <label>日期
           <input name="expense_date" type="date" value="{{ data.expense_date or '' }}">
         </label>
-        <label>Amount
+        <label>金额
           <input name="amount" type="number" step="0.01" value="{{ data.amount or '' }}" required>
         </label>
-        <label>Currency
+        <label>币种
           <input name="currency" value="{{ data.currency or default_currency }}" maxlength="8">
         </label>
       </div>
       <div class="form-row">
-        <label>Vendor
+        <label>商户
           <input name="vendor" value="{{ data.vendor or '' }}">
         </label>
-        <label>Category
+        <label>分类
           <select name="category">
             <option value="">—</option>
             {% for c in categories %}
@@ -56,28 +55,28 @@
             {% endfor %}
           </select>
         </label>
-        <label>Tax
+        <label>税额
           <input name="tax_amount" type="number" step="0.01" value="{{ data.tax_amount or '' }}">
         </label>
       </div>
-      <label>Description
+      <label>描述
         <textarea name="description" rows="2">{{ data.description or '' }}</textarea>
       </label>
       <div class="actions">
-        <button class="btn btn-primary" type="submit">Save record</button>
-        <a class="btn-link" href="/expenses/new">Cancel</a>
+        <button class="btn btn-primary" type="submit">保存记录</button>
+        <a class="btn-link" href="/expenses/new">取消</a>
       </div>
     </form>
   </div>
 
   <div class="card">
-    <h2>Receipt image</h2>
+    <h2>发票图片</h2>
     {% if image_filename %}
       <a href="/expenses/preview/{{ image_filename }}" target="_blank">
-        <img class="receipt-img" src="/expenses/preview/{{ image_filename }}" alt="receipt">
+        <img class="receipt-img" src="/expenses/preview/{{ image_filename }}" alt="发票">
       </a>
     {% else %}
-      <p class="muted">No image.</p>
+      <p class="muted">无图片。</p>
     {% endif %}
   </div>
 </div>

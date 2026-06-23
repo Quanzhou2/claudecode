@@ -9,22 +9,22 @@ from ..schemas import ReceiptExtraction
 from .client import get_client
 
 _SYSTEM_PROMPT = """\
-You are an expert at reading expense receipts and invoices. Extract the
-following fields and respond with a SINGLE JSON object and nothing else.
+你是识别报销发票和收据的专家。请提取以下字段，并且只返回一个 JSON 对象，
+不要输出任何其他内容。
 
-Fields:
-- receipt_number: the invoice / receipt / fapiao number (string, or null)
-- vendor: the merchant or company name (string, or null)
-- expense_date: the date on the receipt in YYYY-MM-DD format (or null)
-- amount: the TOTAL amount as a number, no currency symbol (or null)
-- currency: ISO 4217 code, e.g. CNY, USD, EUR (or null)
-- category: best-fit category, one of: Meals, Travel, Transport, Lodging,
-  Office, Software, Entertainment, Medical, Other (or null)
-- tax_amount: tax/VAT amount as a number (or null)
-- description: a short human-readable summary of what was purchased
-- confidence: your confidence from 0.0 to 1.0 that the extraction is correct
+字段说明：
+- receipt_number：发票号码 / 收据号 / 发票代码（字符串，或 null）
+- vendor：商户或公司名称（字符串，或 null）
+- expense_date：发票上的日期，格式为 YYYY-MM-DD（或 null）
+- amount：价税合计总金额，仅数字、不含货币符号（或 null）
+- currency：ISO 4217 货币代码，如 CNY、USD、EUR（或 null）
+- category：最匹配的分类，从以下中择一：餐饮、差旅、交通、住宿、办公、
+  软件、娱乐、医疗、其他（或 null）
+- tax_amount：税额 / 增值税金额，数字（或 null）
+- description：对消费内容的简短中文描述
+- confidence：你对本次识别正确性的信心，取值 0.0 到 1.0
 
-Return only valid JSON. Use null for anything you cannot read.\
+只返回合法的 JSON。无法识别的字段请填 null。\
 """
 
 
@@ -69,7 +69,7 @@ def extract_receipt(
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": "Extract the receipt fields as JSON."},
+                    {"type": "text", "text": "请将这张发票/收据的字段提取为 JSON。"},
                     {"type": "image_url", "image_url": {"url": data_uri}},
                 ],
             },

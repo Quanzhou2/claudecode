@@ -1,66 +1,66 @@
 {% extends "base.html" %}
-{% block title %}Record #{{ expense.id }} · {{ app_name }}{% endblock %}
+{% block title %}记录 #{{ expense.id }} · {{ app_name }}{% endblock %}
 {% block content %}
 <div class="page-head">
-  <h1>Record #{{ expense.id }}
-    <span class="badge {{ expense.status | status_class }}">{{ expense.status.value }}</span>
+  <h1>记录 #{{ expense.id }}
+    <span class="badge {{ expense.status | status_class }}">{{ expense.status | status_label }}</span>
   </h1>
   <div class="actions">
-    {% if can_edit %}<a class="btn" href="/expenses/{{ expense.id }}/edit">Edit</a>{% endif %}
+    {% if can_edit %}<a class="btn" href="/expenses/{{ expense.id }}/edit">编辑</a>{% endif %}
     {% if can_edit or current_user.is_admin %}
     <form method="post" action="/expenses/{{ expense.id }}/delete"
-          onsubmit="return confirm('Delete this record?')">
-      <button class="btn btn-danger" type="submit">Delete</button>
+          onsubmit="return confirm('确定删除该记录？')">
+      <button class="btn btn-danger" type="submit">删除</button>
     </form>
     {% endif %}
-    <a class="btn-link" href="/expenses">Back</a>
+    <a class="btn-link" href="/expenses">返回</a>
   </div>
 </div>
 
 <div class="grid-2">
   <div class="card">
     <table class="kv">
-      <tr><th>Submitted by</th><td>{{ expense.owner.username }}</td></tr>
-      <tr><th>Receipt number</th><td class="mono">{{ expense.receipt_number or '—' }}</td></tr>
-      <tr><th>Vendor</th><td>{{ expense.vendor or '—' }}</td></tr>
-      <tr><th>Date</th><td>{{ expense.expense_date or '—' }}</td></tr>
-      <tr><th>Amount</th><td><strong>{{ expense.amount | money }} {{ expense.currency }}</strong></td></tr>
-      <tr><th>Tax</th><td>{{ expense.tax_amount | money if expense.tax_amount is not none else '—' }}</td></tr>
-      <tr><th>Category</th><td>{{ expense.category or '—' }}</td></tr>
-      <tr><th>Description</th><td>{{ expense.description or '—' }}</td></tr>
-      <tr><th>Created</th><td>{{ expense.created_at.strftime('%Y-%m-%d %H:%M') }}</td></tr>
+      <tr><th>提交人</th><td>{{ expense.owner.username }}</td></tr>
+      <tr><th>发票号码</th><td class="mono">{{ expense.receipt_number or '—' }}</td></tr>
+      <tr><th>商户</th><td>{{ expense.vendor or '—' }}</td></tr>
+      <tr><th>日期</th><td>{{ expense.expense_date or '—' }}</td></tr>
+      <tr><th>金额</th><td><strong>{{ expense.amount | money }} {{ expense.currency }}</strong></td></tr>
+      <tr><th>税额</th><td>{{ expense.tax_amount | money if expense.tax_amount is not none else '—' }}</td></tr>
+      <tr><th>分类</th><td>{{ expense.category or '—' }}</td></tr>
+      <tr><th>描述</th><td>{{ expense.description or '—' }}</td></tr>
+      <tr><th>创建时间</th><td>{{ expense.created_at.strftime('%Y-%m-%d %H:%M') }}</td></tr>
       {% if expense.reviewer %}
-      <tr><th>Reviewed by</th><td>{{ expense.reviewer.username }}
-        {% if expense.reviewed_at %}on {{ expense.reviewed_at.strftime('%Y-%m-%d %H:%M') }}{% endif %}</td></tr>
+      <tr><th>审核人</th><td>{{ expense.reviewer.username }}
+        {% if expense.reviewed_at %}于 {{ expense.reviewed_at.strftime('%Y-%m-%d %H:%M') }}{% endif %}</td></tr>
       {% endif %}
       {% if expense.review_comment %}
-      <tr><th>Review note</th><td>{{ expense.review_comment }}</td></tr>
+      <tr><th>审核备注</th><td>{{ expense.review_comment }}</td></tr>
       {% endif %}
     </table>
 
     {% if current_user.is_admin %}
     <hr>
-    <h2>Administrator review</h2>
+    <h2>管理员审核</h2>
     <form method="post" action="/expenses/{{ expense.id }}/review" class="review-form">
       <select name="status">
         {% for s in statuses %}
-          <option value="{{ s.value }}" {{ 'selected' if expense.status == s }}>{{ s.value }}</option>
+          <option value="{{ s.value }}" {{ 'selected' if expense.status == s }}>{{ s.value | status_label }}</option>
         {% endfor %}
       </select>
-      <input name="comment" placeholder="Optional note" value="{{ expense.review_comment or '' }}">
-      <button class="btn btn-primary" type="submit">Update status</button>
+      <input name="comment" placeholder="备注（可选）" value="{{ expense.review_comment or '' }}">
+      <button class="btn btn-primary" type="submit">更新状态</button>
     </form>
     {% endif %}
   </div>
 
   <div class="card">
-    <h2>Receipt image</h2>
+    <h2>发票图片</h2>
     {% if expense.image_path %}
       <a href="/expenses/{{ expense.id }}/image" target="_blank">
-        <img class="receipt-img" src="/expenses/{{ expense.id }}/image" alt="receipt">
+        <img class="receipt-img" src="/expenses/{{ expense.id }}/image" alt="发票">
       </a>
     {% else %}
-      <p class="muted">No image attached.</p>
+      <p class="muted">未附图片。</p>
     {% endif %}
   </div>
 </div>

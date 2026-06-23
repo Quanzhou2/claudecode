@@ -11,8 +11,8 @@ from sqlalchemy.orm import Session
 from ..models import Expense, ExpenseStatus, User
 
 CATEGORIES = [
-    "Meals", "Travel", "Transport", "Lodging", "Office",
-    "Software", "Entertainment", "Medical", "Other",
+    "餐饮", "差旅", "交通", "住宿", "办公",
+    "软件", "娱乐", "医疗", "其他",
 ]
 
 
@@ -25,7 +25,7 @@ class DuplicateReceiptError(ExpenseError):
         self.receipt_number = receipt_number
         self.existing = existing
         super().__init__(
-            f"Receipt number '{receipt_number}' has already been submitted."
+            f"发票号码 '{receipt_number}' 已被提交过，不能重复报销。"
         )
 
 
@@ -95,15 +95,15 @@ def can_edit(user: User, expense: Expense) -> bool:
 def get_for_user(db: Session, user: User, expense_id: int) -> Expense:
     expense = db.get(Expense, expense_id)
     if expense is None:
-        raise ExpenseError("Record not found.")
+        raise ExpenseError("未找到该记录。")
     if not can_view(user, expense):
-        raise PermissionDenied("You do not have access to this record.")
+        raise PermissionDenied("您无权访问该记录。")
     return expense
 
 
 def update_expense(db: Session, user: User, expense: Expense, **fields: Any) -> Expense:
     if not can_edit(user, expense):
-        raise PermissionDenied("You are not allowed to edit this record.")
+        raise PermissionDenied("您无权编辑该记录。")
 
     if "receipt_number" in fields:
         new_rn = normalize_receipt_number(fields["receipt_number"])
@@ -134,7 +134,7 @@ def review_expense(
     db: Session, admin: User, expense: Expense, status: ExpenseStatus, comment: str | None
 ) -> Expense:
     if not admin.is_admin:
-        raise PermissionDenied("Only administrators can review records.")
+        raise PermissionDenied("只有管理员可以审核记录。")
     expense.status = status
     expense.review_comment = (comment or "").strip() or None
     expense.reviewer_id = admin.id
@@ -146,7 +146,7 @@ def review_expense(
 
 def delete_expense(db: Session, user: User, expense: Expense) -> None:
     if not (user.is_admin or (expense.user_id == user.id and expense.status == ExpenseStatus.pending)):
-        raise PermissionDenied("You are not allowed to delete this record.")
+        raise PermissionDenied("您无权删除该记录。")
     db.delete(expense)
     db.commit()
 

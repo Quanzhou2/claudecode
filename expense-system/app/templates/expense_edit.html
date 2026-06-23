@@ -1,28 +1,28 @@
 {% extends "base.html" %}
-{% block title %}Edit #{{ expense.id }} · {{ app_name }}{% endblock %}
+{% block title %}编辑 #{{ expense.id }} · {{ app_name }}{% endblock %}
 {% block content %}
-<div class="page-head"><h1>Edit record #{{ expense.id }}</h1></div>
+<div class="page-head"><h1>编辑记录 #{{ expense.id }}</h1></div>
 <div class="card">
   <form method="post" action="/expenses/{{ expense.id }}/edit">
-    <label>Receipt number
+    <label>发票号码
       <input name="receipt_number" value="{{ expense.receipt_number or '' }}">
     </label>
     <div class="form-row">
-      <label>Date
+      <label>日期
         <input name="expense_date" type="date" value="{{ expense.expense_date or '' }}">
       </label>
-      <label>Amount
+      <label>金额
         <input name="amount" type="number" step="0.01" value="{{ expense.amount }}" required>
       </label>
-      <label>Currency
+      <label>币种
         <input name="currency" value="{{ expense.currency }}" maxlength="8">
       </label>
     </div>
     <div class="form-row">
-      <label>Vendor
+      <label>商户
         <input name="vendor" value="{{ expense.vendor or '' }}">
       </label>
-      <label>Category
+      <label>分类
         <select name="category">
           <option value="">—</option>
           {% for c in categories %}
@@ -30,17 +30,17 @@
           {% endfor %}
         </select>
       </label>
-      <label>Tax
+      <label>税额
         <input name="tax_amount" type="number" step="0.01"
                value="{{ expense.tax_amount if expense.tax_amount is not none else '' }}">
       </label>
     </div>
-    <label>Description
+    <label>描述
       <textarea name="description" rows="2">{{ expense.description or '' }}</textarea>
     </label>
     <div class="actions">
-      <button class="btn btn-primary" type="submit">Save changes</button>
-      <a class="btn-link" href="/expenses/{{ expense.id }}">Cancel</a>
+      <button class="btn btn-primary" type="submit">保存修改</button>
+      <a class="btn-link" href="/expenses/{{ expense.id }}">取消</a>
     </div>
   </form>
 </div>

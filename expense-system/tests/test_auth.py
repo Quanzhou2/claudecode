@@ -11,7 +11,7 @@ def test_password_hash_roundtrip():
 def test_register_login_logout_flow(client):
     r = client.post("/register", data={"username": "carol", "password": "secret1"})
     assert r.status_code == 200
-    assert "Dashboard" in r.text  # landed on the dashboard, logged in
+    assert "工作台" in r.text  # landed on the dashboard, logged in
 
     # Logged-in session can reach a protected page.
     assert client.get("/expenses").status_code == 200
@@ -28,9 +28,9 @@ def test_login_rejects_bad_credentials(client):
     client.get("/logout")
     r = client.post("/login", data={"username": "dave", "password": "nope"})
     assert r.status_code == 200
-    assert "Invalid username or password" in r.text
+    assert "用户名或密码错误" in r.text
 
 
 def test_short_credentials_rejected(client):
     r = client.post("/register", data={"username": "ab", "password": "secret1"})
-    assert "at least 3 characters" in r.text
+    assert "至少需要 3 个字符" in r.text

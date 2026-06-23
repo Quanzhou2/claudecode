@@ -1,36 +1,36 @@
 {% extends "base.html" %}
-{% block title %}Dashboard · {{ app_name }}{% endblock %}
+{% block title %}工作台 · {{ app_name }}{% endblock %}
 {% block content %}
 <div class="page-head">
-  <h1>Dashboard</h1>
+  <h1>工作台</h1>
   <span class="muted">
-    {% if current_user.is_admin %}Showing data for <strong>all users</strong>
-    {% else %}Your reimbursements{% endif %}
+    {% if current_user.is_admin %}正在显示<strong>全部用户</strong>的数据
+    {% else %}我的报销{% endif %}
   </span>
 </div>
 
 <div class="cards">
   <div class="card stat">
     <div class="stat-value">{{ stats.total_count }}</div>
-    <div class="stat-label">Records</div>
+    <div class="stat-label">记录数</div>
   </div>
   <div class="card stat">
     <div class="stat-value">{{ stats.total_amount | money }}</div>
-    <div class="stat-label">Total amount</div>
+    <div class="stat-label">总金额</div>
   </div>
   <div class="card stat">
     <div class="stat-value">{{ stats.pending_count }}</div>
-    <div class="stat-label">Pending</div>
+    <div class="stat-label">待审核</div>
   </div>
   <div class="card stat">
     <div class="stat-value">{{ stats.approved_count }}</div>
-    <div class="stat-label">Approved</div>
+    <div class="stat-label">已通过</div>
   </div>
 </div>
 
 <div class="grid-2">
   <div class="card">
-    <h2>Spend by month</h2>
+    <h2>按月份支出</h2>
     {% if stats.by_month %}
       <div class="bars">
         {% for month, total in stats.by_month.items() %}
@@ -43,11 +43,11 @@
         </div>
         {% endfor %}
       </div>
-    {% else %}<p class="muted">No dated records yet.</p>{% endif %}
+    {% else %}<p class="muted">暂无带日期的记录。</p>{% endif %}
   </div>
 
   <div class="card">
-    <h2>Spend by category</h2>
+    <h2>按分类支出</h2>
     {% if stats.by_category %}
       <div class="bars">
         {% for cat, total in stats.by_category.items() %}
@@ -60,14 +60,14 @@
         </div>
         {% endfor %}
       </div>
-    {% else %}<p class="muted">No records yet.</p>{% endif %}
+    {% else %}<p class="muted">暂无记录。</p>{% endif %}
   </div>
 </div>
 
 <div class="card">
   <div class="page-head">
-    <h2>Recent records</h2>
-    <a class="btn" href="/expenses">View all</a>
+    <h2>最近记录</h2>
+    <a class="btn" href="/expenses">查看全部</a>
   </div>
   {% with items = recent %}{% include "_expense_table.html" %}{% endwith %}
 </div>

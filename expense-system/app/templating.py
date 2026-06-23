@@ -8,7 +8,7 @@ from fastapi import Request
 from fastapi.templating import Jinja2Templates
 
 from .config import get_settings
-from .models import User
+from .models import ACTION_LABELS, ENTITY_LABELS, ROLE_LABELS, STATUS_LABELS, User
 
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(_TEMPLATE_DIR))
@@ -33,8 +33,32 @@ def _status_class(status: Any) -> str:
     return _STATUS_CLASS.get(str(key), "badge-pending")
 
 
+def _status_label(status: Any) -> str:
+    key = getattr(status, "value", status)
+    return STATUS_LABELS.get(str(key), str(key))
+
+
+def _role_label(role: Any) -> str:
+    key = getattr(role, "value", role)
+    return ROLE_LABELS.get(str(key), str(key))
+
+
+def _action_label(action: Any) -> str:
+    return ACTION_LABELS.get(str(action), str(action))
+
+
+def _entity_label(entity: Any) -> str:
+    if not entity:
+        return ""
+    return ENTITY_LABELS.get(str(entity), str(entity))
+
+
 templates.env.filters["money"] = _money
 templates.env.filters["status_class"] = _status_class
+templates.env.filters["status_label"] = _status_label
+templates.env.filters["role_label"] = _role_label
+templates.env.filters["action_label"] = _action_label
+templates.env.filters["entity_label"] = _entity_label
 
 
 def render(request: Request, name: str, user: User | None = None, **context: Any):

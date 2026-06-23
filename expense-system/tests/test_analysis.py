@@ -49,7 +49,7 @@ def test_analyze_rejects_unsafe_sql():
     assert result.error is not None
     assert "rejected" in result.error.lower()
     # Falls back to the deterministic category breakdown.
-    assert result.columns == ["category", "count", "total_amount"]
+    assert result.columns == ["分类", "笔数", "合计金额"]
 
 
 def test_analyze_sandbox_has_no_other_tables():
@@ -57,11 +57,11 @@ def test_analyze_sandbox_has_no_other_tables():
     client = FakeAnalysisClient("SELECT * FROM users")
     result = analyze("read users", ROWS, client=client)
     assert result.error is not None
-    assert result.columns == ["category", "count", "total_amount"]  # fallback
+    assert result.columns == ["分类", "笔数", "合计金额"]  # fallback
 
 
 def test_analyze_fallback_without_llm():
     result = analyze("anything", ROWS)  # no client, key empty -> fallback
     assert result.used_llm is False
-    assert result.columns == ["category", "count", "total_amount"]
+    assert result.columns == ["分类", "笔数", "合计金额"]
     assert result.rows[0][0] == "Meals"  # highest total

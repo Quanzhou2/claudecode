@@ -27,15 +27,15 @@ def create_user(
 ) -> User:
     username = (username or "").strip()
     if len(username) < 3:
-        raise AuthError("Username must be at least 3 characters.")
+        raise AuthError("用户名至少需要 3 个字符。")
     if len(password) < 6:
-        raise AuthError("Password must be at least 6 characters.")
+        raise AuthError("密码至少需要 6 个字符。")
     if get_by_username(db, username):
-        raise AuthError("That username is already taken.")
+        raise AuthError("该用户名已被注册。")
     if email:
         existing = db.scalar(select(User).where(User.email == email))
         if existing:
-            raise AuthError("That email is already registered.")
+            raise AuthError("该邮箱已被注册。")
 
     user = User(
         username=username,
@@ -53,9 +53,9 @@ def create_user(
 def authenticate(db: Session, username: str, password: str) -> User:
     user = get_by_username(db, (username or "").strip())
     if not user or not verify_password(password, user.hashed_password):
-        raise AuthError("Invalid username or password.")
+        raise AuthError("用户名或密码错误。")
     if not user.is_active:
-        raise AuthError("This account has been disabled.")
+        raise AuthError("该账户已被禁用。")
     return user
 
 

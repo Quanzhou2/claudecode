@@ -33,6 +33,27 @@ class ExpenseStatus(str, enum.Enum):
     paid = "paid"
 
 
+# Chinese display labels (keyed by the stored string value).
+STATUS_LABELS = {
+    "pending": "待审核",
+    "approved": "已通过",
+    "rejected": "已驳回",
+    "paid": "已支付",
+}
+ROLE_LABELS = {"user": "用户", "admin": "管理员"}
+ACTION_LABELS = {
+    "login": "登录",
+    "register": "注册",
+    "create_expense": "新建报销",
+    "update_expense": "修改报销",
+    "review_expense": "审核报销",
+    "delete_expense": "删除报销",
+    "set_role": "修改角色",
+    "set_active": "启用/禁用",
+}
+ENTITY_LABELS = {"expense": "报销", "user": "用户"}
+
+
 class User(Base):
     __tablename__ = "users"
 

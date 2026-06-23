@@ -1,16 +1,16 @@
 {% extends "base.html" %}
-{% block title %}Register · {{ app_name }}{% endblock %}
+{% block title %}注册 · {{ app_name }}{% endblock %}
 {% block content %}
 <div class="auth-card">
-  <h1>Create account</h1>
+  <h1>创建账号</h1>
   {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
   <form method="post" action="/register">
-    <label>Username <input name="username" value="{{ username or '' }}" required></label>
-    <label>Full name <input name="full_name" value="{{ full_name or '' }}"></label>
-    <label>Email <input name="email" type="email" value="{{ email or '' }}"></label>
-    <label>Password <input name="password" type="password" required></label>
-    <button class="btn btn-primary" type="submit">Register</button>
+    <label>用户名 <input name="username" value="{{ username or '' }}" required></label>
+    <label>姓名 <input name="full_name" value="{{ full_name or '' }}"></label>
+    <label>邮箱 <input name="email" type="email" value="{{ email or '' }}"></label>
+    <label>密码 <input name="password" type="password" required></label>
+    <button class="btn btn-primary" type="submit">注册</button>
   </form>
-  <p class="muted">Already have an account? <a href="/login">Sign in</a></p>
+  <p class="muted">已有账号？<a href="/login">返回登录</a></p>
 </div>
 {% endblock %}

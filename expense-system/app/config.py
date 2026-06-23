@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     )
 
     # Core
-    app_name: str = "Expense Reimbursement System"
+    app_name: str = "报销管理系统"
     secret_key: str = "dev-secret-change-me"
     database_url: str = "sqlite:///./expense.db"
 

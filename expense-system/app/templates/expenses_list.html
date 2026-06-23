@@ -1,36 +1,36 @@
 {% extends "base.html" %}
-{% block title %}Records · {{ app_name }}{% endblock %}
+{% block title %}报销记录 · {{ app_name }}{% endblock %}
 {% block content %}
 <div class="page-head">
-  <h1>Reimbursement records</h1>
+  <h1>报销记录</h1>
   <div class="actions">
-    <a class="btn" href="/expenses/export.csv?status={{ filters.status }}&category={{ filters.category }}&q={{ filters.q }}">⬇ Export CSV</a>
-    <a class="btn btn-primary" href="/expenses/new">+ New record</a>
+    <a class="btn" href="/expenses/export.csv?status={{ filters.status }}&category={{ filters.category }}&q={{ filters.q }}">⬇ 导出 CSV</a>
+    <a class="btn btn-primary" href="/expenses/new">+ 新建报销</a>
   </div>
 </div>
 
 <form class="filters card" method="get" action="/expenses">
-  <input name="q" placeholder="Search vendor / receipt / note" value="{{ filters.q }}">
+  <input name="q" placeholder="搜索 商户 / 发票号 / 备注" value="{{ filters.q }}">
   <select name="status">
-    <option value="">Any status</option>
+    <option value="">全部状态</option>
     {% for s in statuses %}
-      <option value="{{ s }}" {{ 'selected' if filters.status == s }}>{{ s }}</option>
+      <option value="{{ s }}" {{ 'selected' if filters.status == s }}>{{ s | status_label }}</option>
     {% endfor %}
   </select>
   <select name="category">
-    <option value="">Any category</option>
+    <option value="">全部分类</option>
     {% for c in categories %}
       <option value="{{ c }}" {{ 'selected' if filters.category == c }}>{{ c }}</option>
     {% endfor %}
   </select>
-  <input name="date_from" type="date" value="{{ filters.date_from }}" title="From date">
-  <input name="date_to" type="date" value="{{ filters.date_to }}" title="To date">
-  <button class="btn" type="submit">Filter</button>
-  <a class="btn-link" href="/expenses">Reset</a>
+  <input name="date_from" type="date" value="{{ filters.date_from }}" title="起始日期">
+  <input name="date_to" type="date" value="{{ filters.date_to }}" title="结束日期">
+  <button class="btn" type="submit">筛选</button>
+  <a class="btn-link" href="/expenses">重置</a>
 </form>
 
 <div class="card">
-  <p class="muted">{{ total }} record(s)</p>
+  <p class="muted">共 {{ total }} 条记录</p>
   {% include "_expense_table.html" %}
 
   {% if pages > 1 %}

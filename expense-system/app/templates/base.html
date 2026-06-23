@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -12,23 +12,23 @@
 <nav class="navbar">
   <a class="brand" href="/">🧾 {{ app_name }}</a>
   <div class="nav-links">
-    <a href="/">Dashboard</a>
-    <a href="/expenses">Records</a>
-    <a href="/expenses/new">+ New</a>
-    <a href="/analytics">Analyze</a>
+    <a href="/">工作台</a>
+    <a href="/expenses">报销记录</a>
+    <a href="/expenses/new">+ 新建</a>
+    <a href="/analytics">智能分析</a>
     {% if current_user.is_admin %}
-      <a href="/admin/users">Users</a>
-      <a href="/admin/audit">Audit</a>
+      <a href="/admin/users">用户管理</a>
+      <a href="/admin/audit">审计日志</a>
     {% endif %}
   </div>
   <div class="nav-user">
     <span class="user-chip">
       {{ current_user.username }}
       <span class="badge {{ 'badge-admin' if current_user.is_admin else 'badge-user' }}">
-        {{ current_user.role.value }}
+        {{ current_user.role | role_label }}
       </span>
     </span>
-    <a class="btn-link" href="/logout">Logout</a>
+    <a class="btn-link" href="/logout">退出</a>
   </div>
 </nav>
 {% endif %}
@@ -38,15 +38,14 @@
   {% if message %}<div class="alert alert-ok">{{ message }}</div>{% endif %}
   {% if not llm_enabled and current_user %}
     <div class="alert alert-info">
-      LLM is in <strong>offline mode</strong> (no API key set). Receipt fields
-      can be entered manually and analysis uses built-in aggregations. Set
-      <code>LLM_API_KEY</code> to enable automatic extraction &amp; NL analysis.
+      AI 当前处于<strong>离线模式</strong>（未配置 API 密钥）。发票字段可手动录入，
+      分析将使用内置统计。配置 <code>LLM_API_KEY</code> 后即可启用自动识别与自然语言分析。
     </div>
   {% endif %}
   {% block content %}{% endblock %}
 </main>
 
-<footer class="footer">{{ app_name }} · for authorized internal use</footer>
+<footer class="footer">{{ app_name }} · 仅限授权内部使用</footer>
 {% block scripts %}{% endblock %}
 </body>
 </html>

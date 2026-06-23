@@ -29,6 +29,24 @@ analysis falls back to built-in aggregations.
 
 ---
 
+## Language / 本地化
+
+The UI ships in **Simplified Chinese (简体中文)**, and the LLM is prompted to
+return Chinese categories and descriptions. Display strings are centralized to
+keep re-localization easy:
+
+- **Status / role / action / entity labels** — `app/models.py`
+  (`STATUS_LABELS`, `ROLE_LABELS`, `ACTION_LABELS`, `ENTITY_LABELS`), surfaced
+  via Jinja filters (`status_label`, `role_label`, …).
+- **Categories** — `CATEGORIES` in `app/services/expenses.py`.
+- **Page text** — the Jinja templates in `app/templates/`.
+- **LLM prompts** — `app/llm/extraction.py` and `app/llm/analysis.py`.
+
+Stored enum *values* (e.g. `pending`, `admin`) remain English for stability;
+only their displayed labels are translated.
+
+---
+
 ## Quickstart
 
 ```bash

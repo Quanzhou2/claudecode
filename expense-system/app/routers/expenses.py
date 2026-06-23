@@ -14,7 +14,7 @@ from ..config import get_settings
 from ..database import get_db
 from ..deps import require_admin, require_user
 from ..llm.extraction import extract_receipt
-from ..models import ExpenseStatus, User
+from ..models import STATUS_LABELS, ExpenseStatus, User
 from ..services import audit
 from ..services import expenses as svc
 from ..templating import render
@@ -132,14 +132,16 @@ def export_csv(
         q=q or None, page=1, page_size=100000,
     )
     buf = io.StringIO()
+    buf.write("﻿")  # UTF-8 BOM so Excel reads Chinese correctly
     writer = csv.writer(buf)
-    writer.writerow(["id", "owner", "receipt_number", "vendor", "date", "amount",
-                     "currency", "category", "tax", "status", "description"])
+    writer.writerow(["编号", "提交人", "发票号码", "商户", "日期", "金额",
+                     "币种", "分类", "税额", "状态", "描述"])
     for e in items:
         writer.writerow([
             e.id, e.owner.username if e.owner else "", e.receipt_number or "",
             e.vendor or "", e.expense_date or "", e.amount, e.currency,
-            e.category or "", e.tax_amount or "", e.status.value, e.description or "",
+            e.category or "", e.tax_amount or "", STATUS_LABELS.get(e.status.value, e.status.value),
+            e.description or "",
         ])
     return Response(
         content=buf.getvalue(),
@@ -166,10 +168,10 @@ async def extract(
     content = await file.read()
     if file.content_type not in _ALLOWED_IMAGE_TYPES:
         return render(request, "expense_new.html", user=user,
-                      error="Unsupported file type. Upload a JPG, PNG, WEBP or GIF image.")
+                      error="不支持的文件类型，请上传 JPG、PNG、WEBP 或 GIF 图片。")
     if len(content) > settings.max_upload_bytes:
         return render(request, "expense_new.html", user=user,
-                      error=f"File too large (max {settings.max_upload_mb} MB).")
+                      error=f"文件过大（最大 {settings.max_upload_mb} MB）。")
 
     ext = _ALLOWED_IMAGE_TYPES[file.content_type]
     filename = f"{uuid.uuid4().hex}{ext}"
@@ -253,8 +255,8 @@ def edit_form(
     expense = svc.get_for_user(db, user, expense_id)
     if not svc.can_edit(user, expense):
         return render(request, "error.html", user=user,
-                      title="Not allowed",
-                      message="This record can no longer be edited.")
+                      title="无法编辑",
+                      message="该记录已被审核，无法再编辑。")
     return render(request, "expense_edit.html", user=user, expense=expense,
                   categories=svc.CATEGORIES)
 
@@ -282,7 +284,7 @@ def edit_submit(
                       categories=svc.CATEGORIES, error=str(exc))
     except svc.PermissionDenied as exc:
         return render(request, "error.html", user=user,
-                      title="Not allowed", message=str(exc))
+                      title="拒绝访问", message=str(exc))
     audit.log(db, user, "update_expense", "expense", expense.id)
     return RedirectResponse(f"/expenses/{expense.id}", status_code=303)
 

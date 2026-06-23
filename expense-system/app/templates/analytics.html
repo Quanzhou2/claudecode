@@ -1,37 +1,37 @@
 {% extends "base.html" %}
-{% block title %}Analyze · {{ app_name }}{% endblock %}
+{% block title %}智能分析 · {{ app_name }}{% endblock %}
 {% block content %}
 <div class="page-head">
-  <h1>Ask your expenses</h1>
+  <h1>向数据提问</h1>
   {% if scope_count is defined %}
-    <span class="muted">Querying {{ scope_count }} record(s) you can access</span>
+    <span class="muted">正在查询你可访问的 {{ scope_count }} 条记录</span>
   {% endif %}
 </div>
 
 <div class="card">
   <form method="post" action="/analytics">
-    <label>Ask a question in plain language
+    <label>用自然语言提问
       <input name="question" id="question" value="{{ question or '' }}"
-             placeholder="e.g. Total approved spend by category this year" autofocus>
+             placeholder="例如：本年度各分类已通过报销的合计金额" autofocus>
     </label>
     <div class="chips">
       {% for s in suggested %}
         <button type="button" class="chip" onclick="document.getElementById('question').value=this.textContent">{{ s }}</button>
       {% endfor %}
     </div>
-    <button class="btn btn-primary" type="submit">Analyze</button>
+    <button class="btn btn-primary" type="submit">开始分析</button>
   </form>
 </div>
 
 {% if result %}
 <div class="card">
-  <h2>Result</h2>
+  <h2>分析结果</h2>
   {% if result.error %}<div class="alert alert-error">{{ result.error }}</div>{% endif %}
   {% if result.summary %}<p class="summary">{{ result.summary }}</p>{% endif %}
 
   {% if result.used_llm and result.sql %}
     <details class="sql-box">
-      <summary>Generated SQL{% if result.explanation %} — {{ result.explanation }}{% endif %}</summary>
+      <summary>生成的 SQL{% if result.explanation %} — {{ result.explanation }}{% endif %}</summary>
       <pre>{{ result.sql }}</pre>
     </details>
   {% endif %}
@@ -44,7 +44,7 @@
       {% for row in result.rows %}
         <tr>{% for cell in row %}<td>{{ cell if cell is not none else '—' }}</td>{% endfor %}</tr>
       {% else %}
-        <tr><td colspan="{{ result.columns | length }}" class="muted center">No matching rows.</td></tr>
+        <tr><td colspan="{{ result.columns | length }}" class="muted center">没有匹配的数据。</td></tr>
       {% endfor %}
     </tbody>
   </table>
@@ -52,8 +52,8 @@
   {% endif %}
 
   {% if not llm_enabled %}
-    <p class="muted">Offline mode: showing a built-in category breakdown. Set
-    <code>LLM_API_KEY</code> for free-form natural-language analysis.</p>
+    <p class="muted">离线模式：显示内置的分类统计。配置 <code>LLM_API_KEY</code>
+    后可使用自由文本的自然语言分析。</p>
   {% endif %}
 </div>
 {% endif %}

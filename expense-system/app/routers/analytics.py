@@ -14,11 +14,11 @@ from ..templating import render
 router = APIRouter()
 
 SUGGESTED = [
-    "What is my total approved spend this year?",
-    "Break down spending by category, highest first.",
-    "Show monthly totals for the last 6 months.",
-    "Which vendors did I spend the most on?",
-    "List pending receipts over 500.",
+    "我今年已通过报销的总金额是多少？",
+    "按分类统计支出，从高到低排序。",
+    "展示最近 6 个月的每月支出合计。",
+    "在哪些商户的消费最多？",
+    "列出金额超过 500 的待审核发票。",
 ]
 
 
