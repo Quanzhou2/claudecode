@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Edit #{{ expense.id }} · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Edit record #{{ expense.id }}</h1></div>
+<div class="card">
+  <form method="post" action="/expenses/{{ expense.id }}/edit">
+    <label>Receipt number
+      <input name="receipt_number" value="{{ expense.receipt_number or '' }}">
+    </label>
+    <div class="form-row">
+      <label>Date
+        <input name="expense_date" type="date" value="{{ expense.expense_date or '' }}">
+      </label>
+      <label>Amount
+        <input name="amount" type="number" step="0.01" value="{{ expense.amount }}" required>
+      </label>
+      <label>Currency
+        <input name="currency" value="{{ expense.currency }}" maxlength="8">
+      </label>
+    </div>
+    <div class="form-row">
+      <label>Vendor
+        <input name="vendor" value="{{ expense.vendor or '' }}">
+      </label>
+      <label>Category
+        <select name="category">
+          <option value="">—</option>
+          {% for c in categories %}
+            <option value="{{ c }}" {{ 'selected' if expense.category == c }}>{{ c }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Tax
+        <input name="tax_amount" type="number" step="0.01"
+               value="{{ expense.tax_amount if expense.tax_amount is not none else '' }}">
+      </label>
+    </div>
+    <label>Description
+      <textarea name="description" rows="2">{{ expense.description or '' }}</textarea>
+    </label>
+    <div class="actions">
+      <button class="btn btn-primary" type="submit">Save changes</button>
+      <a class="btn-link" href="/expenses/{{ expense.id }}">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

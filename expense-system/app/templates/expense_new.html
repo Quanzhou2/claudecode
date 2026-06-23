@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}New record · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>New reimbursement</h1></div>
+
+<div class="card">
+  <p class="muted">
+    Upload a receipt image. {% if llm_enabled %}The system will read it and
+    pre-fill the fields for you to review.{% else %}(Offline mode: you'll enter
+    the fields manually on the next step.){% endif %}
+  </p>
+  <form method="post" action="/expenses/extract" enctype="multipart/form-data">
+    <label class="dropzone" id="dropzone">
+      <input type="file" name="file" id="fileInput" accept="image/*" required hidden>
+      <div id="dropText">📷 Click to choose a receipt image (JPG/PNG/WEBP/GIF)</div>
+      <img id="preview" alt="preview" hidden>
+    </label>
+    <button class="btn btn-primary" type="submit" id="submitBtn">Read receipt →</button>
+  </form>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const input = document.getElementById('fileInput');
+  const preview = document.getElementById('preview');
+  const dropText = document.getElementById('dropText');
+  input.addEventListener('change', () => {
+    const f = input.files[0];
+    if (!f) return;
+    preview.src = URL.createObjectURL(f);
+    preview.hidden = false;
+    dropText.textContent = f.name;
+  });
+  document.querySelector('form').addEventListener('submit', () => {
+    document.getElementById('submitBtn').textContent = 'Reading…';
+    document.getElementById('submitBtn').disabled = true;
+  });
+</script>
+{% endblock %}

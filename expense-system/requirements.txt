@@ -1,0 +1,24 @@
+# Web framework
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+jinja2==3.1.5
+python-multipart==0.0.20
+
+# Database
+SQLAlchemy==2.0.36
+
+# Config & validation
+pydantic==2.10.5
+pydantic-settings==2.7.1
+python-dotenv==1.0.1
+
+# Auth
+bcrypt==4.2.1
+itsdangerous==2.2.0
+
+# LLM (OpenAI-compatible: OpenAI, DeepSeek, Qwen/DashScope, Moonshot, Zhipu, Ollama, vLLM, ...)
+openai==1.59.6
+
+# Testing
+pytest==8.3.4
+httpx==0.28.1

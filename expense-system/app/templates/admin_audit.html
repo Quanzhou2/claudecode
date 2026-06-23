@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Audit log · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Audit log</h1><span class="muted">Most recent 200 events</span></div>
+<div class="card">
+  <div class="table-wrap">
+  <table class="data-table">
+    <thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Entity</th><th>Detail</th></tr></thead>
+    <tbody>
+    {% for l in logs %}
+      <tr>
+        <td class="mono">{{ l.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td>{{ l.actor.username if l.actor else 'system' }}</td>
+        <td><span class="badge badge-user">{{ l.action }}</span></td>
+        <td>{{ l.entity_type or '' }}{% if l.entity_id %} #{{ l.entity_id }}{% endif %}</td>
+        <td class="muted">{{ l.detail or '' }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="5" class="muted center">No activity yet.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}{{ title or 'Error' }} · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="card center">
+  <h1>{{ title or 'Something went wrong' }}</h1>
+  <p class="muted">{{ message or 'An unexpected error occurred.' }}</p>
+  <a class="btn btn-primary" href="/">Back to dashboard</a>
+</div>
+{% endblock %}

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ app_name }}{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🧾</text></svg>">
+</head>
+<body>
+{% if current_user %}
+<nav class="navbar">
+  <a class="brand" href="/">🧾 {{ app_name }}</a>
+  <div class="nav-links">
+    <a href="/">Dashboard</a>
+    <a href="/expenses">Records</a>
+    <a href="/expenses/new">+ New</a>
+    <a href="/analytics">Analyze</a>
+    {% if current_user.is_admin %}
+      <a href="/admin/users">Users</a>
+      <a href="/admin/audit">Audit</a>
+    {% endif %}
+  </div>
+  <div class="nav-user">
+    <span class="user-chip">
+      {{ current_user.username }}
+      <span class="badge {{ 'badge-admin' if current_user.is_admin else 'badge-user' }}">
+        {{ current_user.role.value }}
+      </span>
+    </span>
+    <a class="btn-link" href="/logout">Logout</a>
+  </div>
+</nav>
+{% endif %}
+
+<main class="container">
+  {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+  {% if message %}<div class="alert alert-ok">{{ message }}</div>{% endif %}
+  {% if not llm_enabled and current_user %}
+    <div class="alert alert-info">
+      LLM is in <strong>offline mode</strong> (no API key set). Receipt fields
+      can be entered manually and analysis uses built-in aggregations. Set
+      <code>LLM_API_KEY</code> to enable automatic extraction &amp; NL analysis.
+    </div>
+  {% endif %}
+  {% block content %}{% endblock %}
+</main>
+
+<footer class="footer">{{ app_name }} · for authorized internal use</footer>
+{% block scripts %}{% endblock %}
+</body>
+</html>

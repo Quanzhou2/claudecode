@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Dashboard</h1>
+  <span class="muted">
+    {% if current_user.is_admin %}Showing data for <strong>all users</strong>
+    {% else %}Your reimbursements{% endif %}
+  </span>
+</div>
+
+<div class="cards">
+  <div class="card stat">
+    <div class="stat-value">{{ stats.total_count }}</div>
+    <div class="stat-label">Records</div>
+  </div>
+  <div class="card stat">
+    <div class="stat-value">{{ stats.total_amount | money }}</div>
+    <div class="stat-label">Total amount</div>
+  </div>
+  <div class="card stat">
+    <div class="stat-value">{{ stats.pending_count }}</div>
+    <div class="stat-label">Pending</div>
+  </div>
+  <div class="card stat">
+    <div class="stat-value">{{ stats.approved_count }}</div>
+    <div class="stat-label">Approved</div>
+  </div>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <h2>Spend by month</h2>
+    {% if stats.by_month %}
+      <div class="bars">
+        {% for month, total in stats.by_month.items() %}
+        <div class="bar-row">
+          <span class="bar-label">{{ month }}</span>
+          <span class="bar-track">
+            <span class="bar-fill" style="width: {{ (total / max_month * 100) | round(1) }}%"></span>
+          </span>
+          <span class="bar-value">{{ total | money }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    {% else %}<p class="muted">No dated records yet.</p>{% endif %}
+  </div>
+
+  <div class="card">
+    <h2>Spend by category</h2>
+    {% if stats.by_category %}
+      <div class="bars">
+        {% for cat, total in stats.by_category.items() %}
+        <div class="bar-row">
+          <span class="bar-label">{{ cat }}</span>
+          <span class="bar-track">
+            <span class="bar-fill alt" style="width: {{ (total / max_cat * 100) | round(1) }}%"></span>
+          </span>
+          <span class="bar-value">{{ total | money }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    {% else %}<p class="muted">No records yet.</p>{% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="page-head">
+    <h2>Recent records</h2>
+    <a class="btn" href="/expenses">View all</a>
+  </div>
+  {% with items = recent %}{% include "_expense_table.html" %}{% endwith %}
+</div>
+{% endblock %}

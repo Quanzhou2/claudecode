@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Record #{{ expense.id }} · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Record #{{ expense.id }}
+    <span class="badge {{ expense.status | status_class }}">{{ expense.status.value }}</span>
+  </h1>
+  <div class="actions">
+    {% if can_edit %}<a class="btn" href="/expenses/{{ expense.id }}/edit">Edit</a>{% endif %}
+    {% if can_edit or current_user.is_admin %}
+    <form method="post" action="/expenses/{{ expense.id }}/delete"
+          onsubmit="return confirm('Delete this record?')">
+      <button class="btn btn-danger" type="submit">Delete</button>
+    </form>
+    {% endif %}
+    <a class="btn-link" href="/expenses">Back</a>
+  </div>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <table class="kv">
+      <tr><th>Submitted by</th><td>{{ expense.owner.username }}</td></tr>
+      <tr><th>Receipt number</th><td class="mono">{{ expense.receipt_number or '—' }}</td></tr>
+      <tr><th>Vendor</th><td>{{ expense.vendor or '—' }}</td></tr>
+      <tr><th>Date</th><td>{{ expense.expense_date or '—' }}</td></tr>
+      <tr><th>Amount</th><td><strong>{{ expense.amount | money }} {{ expense.currency }}</strong></td></tr>
+      <tr><th>Tax</th><td>{{ expense.tax_amount | money if expense.tax_amount is not none else '—' }}</td></tr>
+      <tr><th>Category</th><td>{{ expense.category or '—' }}</td></tr>
+      <tr><th>Description</th><td>{{ expense.description or '—' }}</td></tr>
+      <tr><th>Created</th><td>{{ expense.created_at.strftime('%Y-%m-%d %H:%M') }}</td></tr>
+      {% if expense.reviewer %}
+      <tr><th>Reviewed by</th><td>{{ expense.reviewer.username }}
+        {% if expense.reviewed_at %}on {{ expense.reviewed_at.strftime('%Y-%m-%d %H:%M') }}{% endif %}</td></tr>
+      {% endif %}
+      {% if expense.review_comment %}
+      <tr><th>Review note</th><td>{{ expense.review_comment }}</td></tr>
+      {% endif %}
+    </table>
+
+    {% if current_user.is_admin %}
+    <hr>
+    <h2>Administrator review</h2>
+    <form method="post" action="/expenses/{{ expense.id }}/review" class="review-form">
+      <select name="status">
+        {% for s in statuses %}
+          <option value="{{ s.value }}" {{ 'selected' if expense.status == s }}>{{ s.value }}</option>
+        {% endfor %}
+      </select>
+      <input name="comment" placeholder="Optional note" value="{{ expense.review_comment or '' }}">
+      <button class="btn btn-primary" type="submit">Update status</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2>Receipt image</h2>
+    {% if expense.image_path %}
+      <a href="/expenses/{{ expense.id }}/image" target="_blank">
+        <img class="receipt-img" src="/expenses/{{ expense.id }}/image" alt="receipt">
+      </a>
+    {% else %}
+      <p class="muted">No image attached.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

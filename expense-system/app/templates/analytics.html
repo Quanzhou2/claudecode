@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Analyze · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Ask your expenses</h1>
+  {% if scope_count is defined %}
+    <span class="muted">Querying {{ scope_count }} record(s) you can access</span>
+  {% endif %}
+</div>
+
+<div class="card">
+  <form method="post" action="/analytics">
+    <label>Ask a question in plain language
+      <input name="question" id="question" value="{{ question or '' }}"
+             placeholder="e.g. Total approved spend by category this year" autofocus>
+    </label>
+    <div class="chips">
+      {% for s in suggested %}
+        <button type="button" class="chip" onclick="document.getElementById('question').value=this.textContent">{{ s }}</button>
+      {% endfor %}
+    </div>
+    <button class="btn btn-primary" type="submit">Analyze</button>
+  </form>
+</div>
+
+{% if result %}
+<div class="card">
+  <h2>Result</h2>
+  {% if result.error %}<div class="alert alert-error">{{ result.error }}</div>{% endif %}
+  {% if result.summary %}<p class="summary">{{ result.summary }}</p>{% endif %}
+
+  {% if result.used_llm and result.sql %}
+    <details class="sql-box">
+      <summary>Generated SQL{% if result.explanation %} — {{ result.explanation }}{% endif %}</summary>
+      <pre>{{ result.sql }}</pre>
+    </details>
+  {% endif %}
+
+  {% if result.columns %}
+  <div class="table-wrap">
+  <table class="data-table">
+    <thead><tr>{% for c in result.columns %}<th>{{ c }}</th>{% endfor %}</tr></thead>
+    <tbody>
+      {% for row in result.rows %}
+        <tr>{% for cell in row %}<td>{{ cell if cell is not none else '—' }}</td>{% endfor %}</tr>
+      {% else %}
+        <tr><td colspan="{{ result.columns | length }}" class="muted center">No matching rows.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+
+  {% if not llm_enabled %}
+    <p class="muted">Offline mode: showing a built-in category breakdown. Set
+    <code>LLM_API_KEY</code> for free-form natural-language analysis.</p>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}
