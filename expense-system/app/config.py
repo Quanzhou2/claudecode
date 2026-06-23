@@ -6,6 +6,11 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Project root (the `expense-system/` dir). Used to anchor default file paths
+# so the DB and uploads are the SAME regardless of the current working
+# directory the server / seed script happens to be launched from.
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -15,12 +20,16 @@ class Settings(BaseSettings):
     # Core
     app_name: str = "报销管理系统"
     secret_key: str = "dev-secret-change-me"
-    database_url: str = "sqlite:///./expense.db"
+    database_url: str = f"sqlite:///{_PROJECT_ROOT / 'expense.db'}"
 
     # Uploads
-    upload_dir: str = "./uploads"
+    upload_dir: str = str(_PROJECT_ROOT / "uploads")
     max_upload_mb: int = 10
     default_currency: str = "CNY"
+
+    # Create demo accounts (admin/alice) automatically on startup when the
+    # database has no users yet. Set AUTO_SEED=false to disable.
+    auto_seed: bool = True
 
     # LLM (OpenAI-compatible)
     llm_api_key: str = ""

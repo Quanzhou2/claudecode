@@ -62,19 +62,29 @@ Or manually:
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env            # then edit to add an LLM key (optional)
-python -m scripts.seed          # creates demo accounts + sample data
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload     # accounts are auto-created on first start
 ```
 
-### Demo accounts (from `scripts/seed.py`)
+### Demo accounts
+
+On first startup, when the database is empty, the app **auto-creates** these
+accounts (set `AUTO_SEED=false` to disable):
 
 | Role  | Username | Password   |
 |-------|----------|------------|
 | Admin | `admin`  | `admin123` |
 | User  | `alice`  | `alice123` |
 
-> Change these before any real deployment.
+You can also (re)create them explicitly with `python -m scripts.seed`.
+
+> **Change these before any real deployment.**
+>
+> **Can't log in?** It almost always means the server is reading a *different*
+> SQLite file than the one that was seeded. The default DB path is now anchored
+> to the project directory (`expense-system/expense.db`) so this can't happen
+> from a stray working directory — but if you set a custom relative
+> `DATABASE_URL`, make sure the seed step and the server use the same one. The
+> seed script prints the exact DB path it wrote to.
 
 ---
 
@@ -86,10 +96,11 @@ All settings come from environment variables (or a `.env` file). See
 | Variable | Default | Notes |
 |----------|---------|-------|
 | `SECRET_KEY` | `dev-secret-change-me` | Signs session cookies — **must** be changed in production. |
-| `DATABASE_URL` | `sqlite:///./expense.db` | Any SQLAlchemy URL. |
-| `UPLOAD_DIR` | `./uploads` | Where receipt images are stored. |
+| `DATABASE_URL` | `sqlite:///<project>/expense.db` | Project-anchored absolute path by default. Any SQLAlchemy URL works. |
+| `UPLOAD_DIR` | `<project>/uploads` | Where receipt images are stored. |
 | `MAX_UPLOAD_MB` | `10` | Max image size. |
 | `DEFAULT_CURRENCY` | `CNY` | Default for new records. |
+| `AUTO_SEED` | `true` | Auto-create demo accounts when the DB is empty. |
 | `LLM_API_KEY` | *(empty)* | Empty → **offline mode**. |
 | `LLM_BASE_URL` | `https://api.openai.com/v1` | OpenAI-compatible endpoint. |
 | `LLM_MODEL` | `gpt-4o-mini` | Text model (analysis). |

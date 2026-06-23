@@ -24,6 +24,16 @@ settings = get_settings()
 async def lifespan(app: FastAPI):
     init_db()
     settings.upload_path  # ensure upload dir exists
+    if settings.auto_seed:
+        try:
+            from .bootstrap import ensure_seed_data
+
+            created = ensure_seed_data()
+            if created:
+                print(f"[bootstrap] created demo accounts: {', '.join(created)} "
+                      "(admin/admin123, alice/alice123) — change these in production")
+        except Exception as exc:  # noqa: BLE001 — never block startup on seeding
+            print(f"[bootstrap] skipped auto-seed: {exc}")
     yield
 
 

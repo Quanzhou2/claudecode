@@ -13,6 +13,7 @@ os.environ.setdefault("DATABASE_URL", f"sqlite:///{_TMP}/test.db")
 os.environ.setdefault("SECRET_KEY", "test-secret")
 os.environ.setdefault("UPLOAD_DIR", f"{_TMP}/uploads")
 os.environ["LLM_API_KEY"] = ""  # force offline mode unless a test injects a client
+os.environ["AUTO_SEED"] = "false"  # tests manage their own users
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
