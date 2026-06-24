@@ -59,6 +59,21 @@ def test_extract_order_uses_actual_paid_amount():
     assert result.payment_method == "京东·微信支付"
 
 
+def test_extract_wechat_mini_shop_order():
+    # 微信小店 / 视频号「百亿补贴」order: WeChat transaction no is the dedup key,
+    # and 实付款 (88) is taken over the product's listed price (106.27).
+    content = (
+        '{"receipt_number": "4317402247202409251669024496", '
+        '"vendor": "百亿补贴官方频道", "expense_date": "2024-09-25", '
+        '"amount": "88", "currency": "CNY", "category": "其他", '
+        '"payment_method": "微信小店", "description": "欧莱雅玻色因B5安瓶面膜"}'
+    )
+    result = extract_receipt(b"img", client=FakeVisionClient(content))
+    assert result.receipt_number == "4317402247202409251669024496"
+    assert result.amount == 88.0
+    assert result.expense_date == date(2024, 9, 25)
+
+
 def test_extract_offline_when_no_client():
     # conftest forces LLM_API_KEY="" so get_client() returns None.
     result = extract_receipt(b"img")
