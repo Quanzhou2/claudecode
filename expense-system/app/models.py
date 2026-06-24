@@ -95,6 +95,9 @@ class Expense(Base):
     currency: Mapped[str] = mapped_column(String(8), default="CNY")
     category: Mapped[str | None] = mapped_column(String(64), index=True)
     tax_amount: Mapped[float | None] = mapped_column(Float)
+    # How it was paid, incl. platform + channel, e.g. "微信支付·零钱",
+    # "支付宝·余额宝", "拼多多·多多支付", "京东·微信支付".
+    payment_method: Mapped[str | None] = mapped_column(String(64))
     description: Mapped[str | None] = mapped_column(Text)
     image_path: Mapped[str | None] = mapped_column(String(512))
 

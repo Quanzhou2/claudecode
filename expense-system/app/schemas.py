@@ -15,6 +15,7 @@ class ReceiptExtraction(BaseModel):
     amount: float | None = None
     currency: str | None = None
     category: str | None = None
+    payment_method: str | None = None
     tax_amount: float | None = None
     description: str | None = None
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
@@ -43,10 +44,12 @@ class ReceiptExtraction(BaseModel):
         if v in (None, "", "null"):
             return None
         if isinstance(v, (int, float)):
-            return float(v)
+            return abs(float(v))
         # Strip currency symbols / thousands separators.
         cleaned = "".join(c for c in str(v) if c.isdigit() or c in ".-")
         try:
-            return float(cleaned) if cleaned not in ("", "-", ".") else None
+            # Payment bills show outgoing amounts as negative (e.g. -100.00);
+            # an expense amount is always the positive magnitude.
+            return abs(float(cleaned)) if cleaned not in ("", "-", ".") else None
         except ValueError:
             return None

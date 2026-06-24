@@ -5,7 +5,9 @@
 
 <div class="card">
   <p class="muted">
-    上传发票图片。{% if llm_enabled %}系统会自动识别并预填字段，供你核对。
+    上传报销凭证图片。支持<strong>发票 / 收据</strong>，以及
+    <strong>微信支付、支付宝、拼多多、京东、淘宝</strong>等支付与订单截图。
+    {% if llm_enabled %}系统会自动识别并预填字段，供你核对。
     {% else %}（离线模式：下一步请手动录入字段。）{% endif %}
   </p>
   <form method="post" action="/expenses/extract" enctype="multipart/form-data">

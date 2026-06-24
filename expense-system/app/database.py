@@ -42,3 +42,29 @@ def init_db() -> None:
     from . import models  # noqa: F401  (ensures models are imported)
 
     Base.metadata.create_all(bind=engine)
+    _run_light_migrations()
+
+
+# Columns that may be missing on databases created by an earlier version.
+# (table, column, column DDL type)
+_ADDED_COLUMNS = [
+    ("expenses", "payment_method", "VARCHAR(64)"),
+]
+
+
+def _run_light_migrations() -> None:
+    """Add new nullable columns to pre-existing SQLite tables in place.
+
+    SQLAlchemy's create_all never ALTERs existing tables, so without this an
+    upgraded app would crash on the new column. Only runs for SQLite; for other
+    backends use a real migration tool.
+    """
+    if engine.dialect.name != "sqlite":
+        return
+    with engine.begin() as conn:
+        for table, column, ddl in _ADDED_COLUMNS:
+            cols = {row[1] for row in conn.exec_driver_sql(f"PRAGMA table_info({table})")}
+            if cols and column not in cols:
+                conn.exec_driver_sql(
+                    f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"
+                )

@@ -31,6 +31,7 @@ SCHEMA_COLUMNS = [
     ("amount", "REAL"),
     ("currency", "TEXT"),
     ("category", "TEXT"),
+    ("payment_method", "TEXT"),
     ("tax_amount", "REAL"),
     ("status", "TEXT"),  # pending / approved / rejected / paid
     ("description", "TEXT"),

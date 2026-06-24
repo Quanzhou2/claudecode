@@ -69,6 +69,7 @@ def create_expense(db: Session, owner: User, *, raw: str | None = None, **fields
         amount=float(fields.get("amount") or 0),
         currency=(fields.get("currency") or "CNY").strip().upper(),
         category=(fields.get("category") or "").strip() or None,
+        payment_method=(fields.get("payment_method") or "").strip() or None,
         tax_amount=fields.get("tax_amount"),
         description=(fields.get("description") or "").strip() or None,
         image_path=fields.get("image_path"),
@@ -113,7 +114,7 @@ def update_expense(db: Session, user: User, expense: Expense, **fields: Any) -> 
                 raise DuplicateReceiptError(new_rn, clash)
         expense.receipt_number = new_rn
 
-    for attr in ("vendor", "category", "description"):
+    for attr in ("vendor", "category", "description", "payment_method"):
         if attr in fields:
             setattr(expense, attr, (fields[attr] or "").strip() or None)
     if "expense_date" in fields:
@@ -220,6 +221,7 @@ def rows_for_analysis(db: Session, user: User) -> list[dict]:
                 "amount": float(e.amount or 0),
                 "currency": e.currency,
                 "category": e.category,
+                "payment_method": e.payment_method,
                 "tax_amount": float(e.tax_amount) if e.tax_amount is not None else None,
                 "status": e.status.value,
                 "description": e.description,

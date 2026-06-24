@@ -27,6 +27,7 @@
       <tr><th>金额</th><td><strong>{{ expense.amount | money }} {{ expense.currency }}</strong></td></tr>
       <tr><th>税额</th><td>{{ expense.tax_amount | money if expense.tax_amount is not none else '—' }}</td></tr>
       <tr><th>分类</th><td>{{ expense.category or '—' }}</td></tr>
+      <tr><th>支付方式</th><td>{{ expense.payment_method or '—' }}</td></tr>
       <tr><th>描述</th><td>{{ expense.description or '—' }}</td></tr>
       <tr><th>创建时间</th><td>{{ expense.created_at.strftime('%Y-%m-%d %H:%M') }}</td></tr>
       {% if expense.reviewer %}

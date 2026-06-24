@@ -35,6 +35,10 @@
                value="{{ expense.tax_amount if expense.tax_amount is not none else '' }}">
       </label>
     </div>
+    <label>支付方式
+      <input name="payment_method" value="{{ expense.payment_method or '' }}"
+             placeholder="如 微信支付·零钱 / 支付宝·余额宝 / 拼多多·多多支付">
+    </label>
     <label>描述
       <textarea name="description" rows="2">{{ expense.description or '' }}</textarea>
     </label>

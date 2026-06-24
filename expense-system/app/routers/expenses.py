@@ -135,13 +135,13 @@ def export_csv(
     buf.write("﻿")  # UTF-8 BOM so Excel reads Chinese correctly
     writer = csv.writer(buf)
     writer.writerow(["编号", "提交人", "发票号码", "商户", "日期", "金额",
-                     "币种", "分类", "税额", "状态", "描述"])
+                     "币种", "分类", "支付方式", "税额", "状态", "描述"])
     for e in items:
         writer.writerow([
             e.id, e.owner.username if e.owner else "", e.receipt_number or "",
             e.vendor or "", e.expense_date or "", e.amount, e.currency,
-            e.category or "", e.tax_amount or "", STATUS_LABELS.get(e.status.value, e.status.value),
-            e.description or "",
+            e.category or "", e.payment_method or "", e.tax_amount or "",
+            STATUS_LABELS.get(e.status.value, e.status.value), e.description or "",
         ])
     return Response(
         content=buf.getvalue(),
@@ -198,6 +198,7 @@ def create(
     amount: str = Form(""),
     currency: str = Form(""),
     category: str = Form(""),
+    payment_method: str = Form(""),
     tax_amount: str = Form(""),
     description: str = Form(""),
     image_path: str = Form(""),
@@ -214,6 +215,7 @@ def create(
             amount=_parse_float(amount) or 0,
             currency=currency or settings.default_currency,
             category=category,
+            payment_method=payment_method,
             tax_amount=_parse_float(tax_amount),
             description=description,
             image_path=image_name,
@@ -226,7 +228,8 @@ def create(
             data={
                 "receipt_number": receipt_number, "vendor": vendor,
                 "expense_date": expense_date, "amount": amount, "currency": currency,
-                "category": category, "tax_amount": tax_amount, "description": description,
+                "category": category, "payment_method": payment_method,
+                "tax_amount": tax_amount, "description": description,
             },
         )
     audit.log(db, user, "create_expense", "expense", expense.id,
@@ -268,6 +271,7 @@ def edit_submit(
     receipt_number: str = Form(""), vendor: str = Form(""),
     expense_date: str = Form(""), amount: str = Form(""),
     currency: str = Form(""), category: str = Form(""),
+    payment_method: str = Form(""),
     tax_amount: str = Form(""), description: str = Form(""),
 ):
     expense = svc.get_for_user(db, user, expense_id)
@@ -276,7 +280,7 @@ def edit_submit(
             db, user, expense,
             receipt_number=receipt_number, vendor=vendor,
             expense_date=_parse_date(expense_date), amount=_parse_float(amount),
-            currency=currency, category=category,
+            currency=currency, category=category, payment_method=payment_method,
             tax_amount=_parse_float(tax_amount), description=description,
         )
     except svc.DuplicateReceiptError as exc:
