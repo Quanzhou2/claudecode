@@ -54,6 +54,18 @@ def _strip_json(text: str) -> str:
     return text
 
 
+def _to_extraction(content: str) -> ReceiptExtraction:
+    """Parse an LLM JSON response into a ReceiptExtraction (best-effort)."""
+    try:
+        data = json.loads(_strip_json(content))
+    except (json.JSONDecodeError, ValueError):
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
+    data["llm_used"] = True
+    return ReceiptExtraction(**data)
+
+
 def extract_receipt(
     image_bytes: bytes,
     mime_type: str = "image/jpeg",
@@ -61,7 +73,7 @@ def extract_receipt(
     client=None,
     model: str | None = None,
 ) -> ReceiptExtraction:
-    """Return structured receipt fields.
+    """Return structured receipt fields from an image.
 
     Falls back to an empty (manual-entry) result when no LLM is configured,
     so the upload flow always works.
@@ -89,12 +101,35 @@ def extract_receipt(
         ],
     )
     content = resp.choices[0].message.content or "{}"
-    try:
-        data = json.loads(_strip_json(content))
-    except (json.JSONDecodeError, ValueError):
-        data = {}
+    return _to_extraction(content)
 
-    if not isinstance(data, dict):
-        data = {}
-    data["llm_used"] = True
-    return ReceiptExtraction(**data)
+
+def extract_receipt_from_text(
+    text: str, *, client=None, model: str | None = None
+) -> ReceiptExtraction:
+    """Return structured receipt fields from pasted/typed text.
+
+    When no LLM is configured, the pasted text is kept in the description so it
+    isn't lost and the user can finish the record manually.
+    """
+    text = (text or "").strip()
+    settings = get_settings()
+    client = client if client is not None else get_client()
+    if client is None:
+        return ReceiptExtraction(description=text[:1000] or None, llm_used=False)
+
+    model = model or settings.llm_model
+    resp = client.chat.completions.create(
+        model=model,
+        temperature=0,
+        messages=[
+            {"role": "system", "content": _SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": "以下是一段交易 / 支付 / 发票信息文本，请提取为 JSON：\n\n" + text,
+            },
+        ],
+    )
+    content = resp.choices[0].message.content or "{}"
+    return _to_extraction(content)
+

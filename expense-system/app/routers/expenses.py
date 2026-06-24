@@ -13,8 +13,9 @@ from sqlalchemy.orm import Session
 from ..config import get_settings
 from ..database import get_db
 from ..deps import require_admin, require_user
-from ..llm.extraction import extract_receipt
+from ..llm.extraction import extract_receipt, extract_receipt_from_text
 from ..models import STATUS_LABELS, ExpenseStatus, User
+from ..schemas import ReceiptExtraction
 from ..services import audit
 from ..services import expenses as svc
 from ..templating import render
@@ -158,6 +159,16 @@ def new_form(request: Request, user: User = Depends(require_user)):
     return render(request, "expense_new.html", user=user)
 
 
+@router.get("/expenses/manual")
+def manual_form(request: Request, user: User = Depends(require_user)):
+    """Go straight to a blank review form for fully manual entry."""
+    return render(
+        request, "expense_review.html", user=user,
+        data=ReceiptExtraction(), image_filename=None, raw="",
+        duplicate=None, categories=svc.CATEGORIES,
+    )
+
+
 @router.post("/expenses/extract")
 async def extract(
     request: Request,
@@ -183,6 +194,25 @@ async def extract(
     return render(
         request, "expense_review.html", user=user,
         data=extraction, image_filename=filename, raw=extraction.model_dump_json(),
+        duplicate=duplicate, categories=svc.CATEGORIES,
+    )
+
+
+@router.post("/expenses/extract-text")
+def extract_text(
+    request: Request,
+    text: str = Form(""),
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    if not text.strip():
+        return render(request, "expense_new.html", user=user,
+                      error="请先粘贴要识别的文字。")
+    extraction = extract_receipt_from_text(text)
+    duplicate = svc.find_by_receipt_number(db, extraction.receipt_number)
+    return render(
+        request, "expense_review.html", user=user,
+        data=extraction, image_filename=None, raw=extraction.model_dump_json(),
         duplicate=duplicate, categories=svc.CATEGORIES,
     )
 

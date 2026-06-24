@@ -1,23 +1,39 @@
 {% extends "base.html" %}
 {% block title %}新建报销 · {{ app_name }}{% endblock %}
 {% block content %}
-<div class="page-head"><h1>新建报销</h1></div>
+<div class="page-head">
+  <h1>新建报销</h1>
+  <a class="btn-link" href="/expenses/manual">或手动录入 →</a>
+</div>
 
-<div class="card">
-  <p class="muted">
-    上传报销凭证图片。支持<strong>发票 / 收据</strong>，以及
-    <strong>微信支付、支付宝、拼多多、京东、淘宝</strong>等支付与订单截图。
-    {% if llm_enabled %}系统会自动识别并预填字段，供你核对。
-    {% else %}（离线模式：下一步请手动录入字段。）{% endif %}
-  </p>
-  <form method="post" action="/expenses/extract" enctype="multipart/form-data">
-    <label class="dropzone" id="dropzone">
-      <input type="file" name="file" id="fileInput" accept="image/*" required hidden>
-      <div id="dropText">📷 点击选择发票图片（JPG/PNG/WEBP/GIF）</div>
-      <img id="preview" alt="预览" hidden>
-    </label>
-    <button class="btn btn-primary" type="submit" id="submitBtn">识别发票 →</button>
-  </form>
+<p class="muted">
+  支持<strong>发票 / 收据</strong>，以及<strong>微信支付、支付宝、拼多多、京东、淘宝</strong>等
+  支付与订单截图。可上传图片，或直接粘贴订单 / 账单文字。
+</p>
+
+<div class="grid-2">
+  <div class="card">
+    <h2>📷 上传图片</h2>
+    <form method="post" action="/expenses/extract" enctype="multipart/form-data">
+      <label class="dropzone" id="dropzone">
+        <input type="file" name="file" id="fileInput" accept="image/*" required hidden>
+        <div id="dropText">点击选择凭证图片（JPG / PNG / WEBP / GIF）</div>
+        <img id="preview" alt="预览" hidden>
+      </label>
+      <button class="btn btn-primary" type="submit" id="submitBtn">识别图片 →</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>📝 粘贴文字</h2>
+    <form method="post" action="/expenses/extract-text">
+      <label>粘贴订单 / 账单文字，自动识别字段
+        <textarea name="text" rows="9" required
+                  placeholder="例如：&#10;订单编号 2305323517530017374&#10;微信交易号 431740224720240925...&#10;实付款 ¥88&#10;付款时间 2024-09-25 16:02:54&#10;商品 欧莱雅玻色因B5安瓶面膜"></textarea>
+      </label>
+      <button class="btn btn-primary" type="submit">识别文字 →</button>
+    </form>
+  </div>
 </div>
 {% endblock %}
 {% block scripts %}
@@ -32,9 +48,10 @@
     preview.hidden = false;
     dropText.textContent = f.name;
   });
-  document.querySelector('form').addEventListener('submit', () => {
-    document.getElementById('submitBtn').textContent = '识别中…';
-    document.getElementById('submitBtn').disabled = true;
+  document.getElementById('fileInput').closest('form').addEventListener('submit', () => {
+    const b = document.getElementById('submitBtn');
+    b.textContent = '识别中…';
+    b.disabled = true;
   });
 </script>
 {% endblock %}

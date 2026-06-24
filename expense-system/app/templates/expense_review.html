@@ -5,7 +5,7 @@
 
 {% if data.llm_used %}
   <div class="alert alert-ok">
-    已从发票中识别字段
+    已自动识别字段
     {% if data.confidence %}（置信度 {{ (data.confidence * 100) | round }}%）{% endif %}，
     请核对后保存。
   </div>

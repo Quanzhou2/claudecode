@@ -2,7 +2,7 @@ from datetime import date
 
 from _fakes import FakeVisionClient
 
-from app.llm.extraction import extract_receipt
+from app.llm.extraction import extract_receipt, extract_receipt_from_text
 
 
 def test_extract_parses_json():
@@ -78,3 +78,19 @@ def test_extract_offline_when_no_client():
     # conftest forces LLM_API_KEY="" so get_client() returns None.
     result = extract_receipt(b"img")
     assert result.llm_used is False
+
+
+def test_extract_from_text_with_client():
+    content = '{"receipt_number": "2305323517530017374", "amount": "88", "vendor": "百亿补贴"}'
+    result = extract_receipt_from_text("订单编号 2305...", client=FakeVisionClient(content))
+    assert result.llm_used is True
+    assert result.receipt_number == "2305323517530017374"
+    assert result.amount == 88.0
+
+
+def test_extract_from_text_offline_keeps_text():
+    # Offline: the pasted text is preserved in the description for manual editing.
+    pasted = "订单编号 2305323517530017374 实付款 88 付款时间 2024-09-25"
+    result = extract_receipt_from_text(pasted)
+    assert result.llm_used is False
+    assert result.description == pasted
