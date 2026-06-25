@@ -92,6 +92,25 @@
       <label>描述
         <textarea name="description" rows="2">{{ data.description or '' }}</textarea>
       </label>
+
+      {% if (ticket_type or 'einvoice') == 'einvoice' %}
+        {% if data.extra_fields %}
+          <details open class="extra-box">
+            <summary>识别到的其他字段（{{ data.extra_fields | length }}）</summary>
+            <table class="kv">
+              {% for k, v in data.extra_fields.items() %}
+                <tr><th>{{ k }}</th><td>{{ v }}</td></tr>
+              {% endfor %}
+            </table>
+            <label class="muted">可编辑（JSON）
+              <textarea name="extra_fields" rows="6">{{ data.extra_fields | json_zh }}</textarea>
+            </label>
+          </details>
+        {% else %}
+          <input type="hidden" name="extra_fields" value="">
+        {% endif %}
+      {% endif %}
+
       <div class="actions">
         <button class="btn btn-primary" type="submit">保存记录</button>
         <a class="btn-link" href="/expenses/new">取消</a>

@@ -18,8 +18,26 @@ class ReceiptExtraction(BaseModel):
     payment_method: str | None = None
     tax_amount: float | None = None
     description: str | None = None
+    # Any other fields read off the document (e.g. 购买方名称, 销售方纳税人识别号,
+    # 发票代码, 校验码, 价税合计大写, 开票人, 备注, line items, ...).
+    extra_fields: dict[str, str] = Field(default_factory=dict)
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
     llm_used: bool = False
+
+    @field_validator("extra_fields", mode="before")
+    @classmethod
+    def _coerce_extra(cls, v):
+        if not isinstance(v, dict):
+            return {}
+        out: dict[str, str] = {}
+        for key, val in v.items():
+            if key is None or val is None or val == "":
+                continue
+            if isinstance(val, (dict, list)):
+                import json
+                val = json.dumps(val, ensure_ascii=False)
+            out[str(key)] = str(val)
+        return out
 
     @field_validator("expense_date", mode="before")
     @classmethod

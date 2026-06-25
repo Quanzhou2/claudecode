@@ -70,4 +70,15 @@
     {% endif %}
   </div>
 </div>
+
+{% if expense.ticket_type == 'einvoice' and expense.extra_fields_dict %}
+<div class="card">
+  <h2>其他字段（{{ expense.extra_fields_dict | length }}）</h2>
+  <table class="kv">
+    {% for k, v in expense.extra_fields_dict.items() %}
+      <tr><th>{{ k }}</th><td>{{ v }}</td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
 {% endblock %}

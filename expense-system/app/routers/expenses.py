@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import uuid
 from datetime import date
 
@@ -44,6 +45,18 @@ _MAX_BATCH = 30  # max images processed per upload
 def _at(values: list[str], i: int) -> str:
     """Safe positional access for parallel batch-form lists."""
     return values[i] if i < len(values) else ""
+
+
+def _parse_json_dict(value: str) -> dict:
+    """Parse a JSON object from a form field; {} on empty/invalid."""
+    value = (value or "").strip()
+    if not value:
+        return {}
+    try:
+        data = json.loads(value)
+        return data if isinstance(data, dict) else {}
+    except ValueError:
+        return {}
 
 
 def _submitter_users(db: Session, user: User) -> list[User]:
@@ -315,9 +328,11 @@ def create(
     description: str = Form(""),
     image_path: str = Form(""),
     submitter: str = Form(""),
+    extra_fields: str = Form(""),
     raw: str = Form(""),
 ):
     owner = _resolve_owner(db, user, submitter)
+    extra = _parse_json_dict(extra_fields)
     image_name = _safe_upload_name(image_path) if image_path else None
     common = dict(
         vendor=vendor,
@@ -344,7 +359,8 @@ def create(
             )
         else:
             expense = svc.create_einvoice(
-                db, owner, invoice_number=number, raw=raw or None, **common,
+                db, owner, invoice_number=number, raw=raw or None,
+                extra_fields=extra, **common,
             )
     except svc.ExpenseError as exc:
         # Covers duplicates (invoice/image) and missing-dedup-key errors.
@@ -360,6 +376,7 @@ def create(
                 "expense_date": expense_date, "amount": amount, "currency": currency,
                 "category": category, "payment_method": payment_method,
                 "tax_amount": tax_amount, "description": description,
+                "extra_fields": extra,
             },
         )
     audit.log(db, user, "create_expense", "expense", expense.id,
@@ -385,6 +402,7 @@ def batch_create(
     description: list[str] = Form([]),
     action: list[str] = Form([]),
     submitter: str = Form(""),
+    extra_fields: list[str] = Form([]),
     raw: list[str] = Form([]),
 ):
     owner = _resolve_owner(db, user, submitter)
@@ -417,7 +435,8 @@ def batch_create(
             else:
                 e = svc.create_einvoice(
                     db, owner, invoice_number=_at(number, i),
-                    raw=_at(raw, i) or None, **common,
+                    raw=_at(raw, i) or None,
+                    extra_fields=_parse_json_dict(_at(extra_fields, i)), **common,
                 )
             saved.append(e)
             audit.log(db, user, "create_expense", "expense", e.id,
@@ -466,6 +485,7 @@ def edit_submit(
     currency: str = Form(""), category: str = Form(""),
     payment_method: str = Form(""),
     tax_amount: str = Form(""), description: str = Form(""),
+    extra_fields: str = Form(""),
 ):
     expense = svc.get_for_user(db, user, expense_id)
     number_field = (
@@ -478,6 +498,7 @@ def edit_submit(
             expense_date=_parse_date(expense_date), amount=_parse_float(amount),
             currency=currency, category=category, payment_method=payment_method,
             tax_amount=_parse_float(tax_amount), description=description,
+            extra_fields=extra_fields,
         )
     except svc.PermissionDenied as exc:
         return render(request, "error.html", user=user,

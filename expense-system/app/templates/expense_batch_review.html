@@ -37,6 +37,10 @@
     <div class="batch-fields">
       <input type="hidden" name="image_path" value="{{ d.image_filename }}">
       <input type="hidden" name="raw" value="{{ d.raw }}">
+      <input type="hidden" name="extra_fields" value="{{ d.data.extra_fields | json_zh }}">
+      {% if tt == 'einvoice' and d.data.extra_fields %}
+        <p class="muted">已识别其他字段 {{ d.data.extra_fields | length }} 项（保存后可在详情查看 / 编辑）。</p>
+      {% endif %}
 
       {% if d.duplicate %}
         {% set dv = current_user.is_admin or d.duplicate.user_id == current_user.id %}

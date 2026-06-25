@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import enum
+import json
 from datetime import date, datetime
 
 from sqlalchemy import (
@@ -145,8 +146,20 @@ class EInvoice(Expense):
 
     id: Mapped[int] = mapped_column(ForeignKey("expenses.id"), primary_key=True)
     invoice_number: Mapped[str | None] = mapped_column(String(128), index=True)
+    # JSON map of all other fields read off the invoice.
+    extra_fields: Mapped[str | None] = mapped_column(Text)
 
     __mapper_args__ = {"polymorphic_identity": "einvoice"}
+
+    @property
+    def extra_fields_dict(self) -> dict:
+        if not self.extra_fields:
+            return {}
+        try:
+            data = json.loads(self.extra_fields)
+            return data if isinstance(data, dict) else {}
+        except (ValueError, TypeError):
+            return {}
 
 
 class PaymentVoucher(Expense):

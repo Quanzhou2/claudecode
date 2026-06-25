@@ -53,6 +53,11 @@
     <label>描述
       <textarea name="description" rows="2">{{ expense.description or '' }}</textarea>
     </label>
+    {% if expense.ticket_type == 'einvoice' %}
+    <label>其他字段（JSON，可编辑）
+      <textarea name="extra_fields" rows="8">{{ expense.extra_fields_dict | json_zh }}</textarea>
+    </label>
+    {% endif %}
     <div class="actions">
       <button class="btn btn-primary" type="submit">保存修改</button>
       <a class="btn-link" href="/expenses/{{ expense.id }}">取消</a>

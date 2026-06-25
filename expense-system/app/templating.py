@@ -64,6 +64,15 @@ def _ticket_type_label(value: Any) -> str:
     return TICKET_TYPE_LABELS.get(str(value), str(value))
 
 
+def _json_zh(value: Any) -> str:
+    """Pretty JSON with Chinese kept readable (no \\uXXXX escaping)."""
+    import json
+
+    if not value:
+        return ""
+    return json.dumps(value, ensure_ascii=False, indent=2)
+
+
 templates.env.filters["money"] = _money
 templates.env.filters["status_class"] = _status_class
 templates.env.filters["status_label"] = _status_label
@@ -71,6 +80,7 @@ templates.env.filters["role_label"] = _role_label
 templates.env.filters["action_label"] = _action_label
 templates.env.filters["entity_label"] = _entity_label
 templates.env.filters["ticket_type_label"] = _ticket_type_label
+templates.env.filters["json_zh"] = _json_zh
 
 
 def render(request: Request, name: str, user: User | None = None, **context: Any):

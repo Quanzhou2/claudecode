@@ -7,6 +7,7 @@ Two voucher types live in their own tables:
 """
 from __future__ import annotations
 
+import json
 from collections import OrderedDict
 from datetime import date, datetime
 from typing import Any
@@ -115,7 +116,7 @@ def _common_fields(fields: dict[str, Any]) -> dict[str, Any]:
 
 def create_einvoice(
     db: Session, owner: User, *, invoice_number: str | None,
-    raw: str | None = None, **fields: Any,
+    raw: str | None = None, extra_fields: dict | None = None, **fields: Any,
 ) -> EInvoice:
     num = normalize_number(invoice_number)
     if not num:
@@ -126,7 +127,9 @@ def create_einvoice(
 
     e = EInvoice(
         user_id=owner.id, invoice_number=num, status=ExpenseStatus.pending,
-        extracted_raw=raw, **_common_fields(fields),
+        extracted_raw=raw,
+        extra_fields=json.dumps(extra_fields, ensure_ascii=False) if extra_fields else None,
+        **_common_fields(fields),
     )
     db.add(e)
     db.commit()
@@ -195,6 +198,23 @@ def update_expense(db: Session, user: User, expense: Expense, **fields: Any) -> 
         expense.invoice_number = new_num
     if isinstance(expense, PaymentVoucher) and "payment_number" in fields:
         expense.payment_number = normalize_number(fields["payment_number"])
+    if isinstance(expense, EInvoice) and "extra_fields" in fields:
+        raw_extra = fields["extra_fields"]
+        if isinstance(raw_extra, dict):
+            expense.extra_fields = json.dumps(raw_extra, ensure_ascii=False) if raw_extra else None
+        else:
+            text = (raw_extra or "").strip()
+            if not text:
+                expense.extra_fields = None
+            else:
+                try:
+                    parsed = json.loads(text)
+                    if isinstance(parsed, dict):
+                        expense.extra_fields = (
+                            json.dumps(parsed, ensure_ascii=False) if parsed else None
+                        )
+                except ValueError:
+                    pass  # leave unchanged on invalid JSON
 
     for attr in ("vendor", "category", "description", "payment_method"):
         if attr in fields:

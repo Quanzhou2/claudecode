@@ -45,6 +45,29 @@ def init_db() -> None:
     Base.metadata.create_all(bind=engine)
     if legacy_rows:
         _legacy_insert(legacy_rows)
+    _add_missing_columns()
+
+
+# New nullable columns to add to existing tables. (table, column, DDL type)
+_ADDED_COLUMNS = [
+    ("e_invoices", "extra_fields", "TEXT"),
+]
+
+
+def _add_missing_columns() -> None:
+    """Add newly-introduced nullable columns to existing SQLite tables."""
+    if not _is_sqlite():
+        return
+    with engine.begin() as conn:
+        for table, column, ddl in _ADDED_COLUMNS:
+            exists = conn.exec_driver_sql(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name=:n", {"n": table}
+            ).first()
+            if not exists:
+                continue
+            cols = {r[1] for r in conn.exec_driver_sql(f"PRAGMA table_info({table})")}
+            if column not in cols:
+                conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
 
 
 def _is_sqlite() -> bool:
