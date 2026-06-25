@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}批量保存结果 · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>批量保存结果</h1></div>
+
+<div class="cards">
+  <div class="card stat">
+    <div class="stat-value">{{ saved | length }}</div>
+    <div class="stat-label">已保存</div>
+  </div>
+  <div class="card stat">
+    <div class="stat-value">{{ skipped | length }}</div>
+    <div class="stat-label">跳过 / 失败</div>
+  </div>
+</div>
+
+{% if saved %}
+<div class="card">
+  <h2>已保存（{{ saved | length }}）</h2>
+  <div class="table-wrap">
+  <table class="data-table">
+    <thead><tr><th>#</th><th>单号</th><th>商户</th><th class="num">金额</th></tr></thead>
+    <tbody>
+    {% for e in saved %}
+      <tr class="clickable" onclick="location.href='/expenses/{{ e.id }}'">
+        <td>{{ e.id }}</td>
+        <td class="mono">{{ (e.invoice_number if e.ticket_type == 'einvoice' else e.payment_number) or '—' }}</td>
+        <td>{{ e.vendor or '—' }}</td>
+        <td class="num">{{ e.amount | money }} {{ e.currency }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endif %}
+
+{% if skipped %}
+<div class="card">
+  <h2>跳过 / 失败（{{ skipped | length }}）</h2>
+  <div class="table-wrap">
+  <table class="data-table">
+    <thead><tr><th>单号 / 项</th><th>原因</th></tr></thead>
+    <tbody>
+    {% for label, reason in skipped %}
+      <tr><td class="mono">{{ label }}</td><td class="muted">{{ reason }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endif %}
+
+<div class="actions">
+  <a class="btn btn-primary" href="/expenses">查看报销记录</a>
+  <a class="btn" href="/expenses/new">继续新建</a>
+</div>
+{% endblock %}

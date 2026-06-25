@@ -22,9 +22,9 @@
           <span>支付凭证</span><small>保存图片，按图片相似度查重</small></label>
       </div>
       <label class="dropzone" id="dropzone">
-        <input type="file" name="file" id="fileInput" accept="image/*" required hidden>
-        <div id="dropText">点击选择凭证图片（JPG / PNG / WEBP / GIF）</div>
-        <img id="preview" alt="预览" hidden>
+        <input type="file" name="files" id="fileInput" accept="image/*" multiple required hidden>
+        <div id="dropText">点击选择凭证图片，可一次选择多张（JPG / PNG / WEBP / GIF）</div>
+        <div id="previews" class="previews"></div>
       </label>
       <button class="btn btn-primary" type="submit" id="submitBtn">识别图片 →</button>
     </form>
@@ -45,16 +45,20 @@
 {% block scripts %}
 <script>
   const input = document.getElementById('fileInput');
-  const preview = document.getElementById('preview');
+  const previews = document.getElementById('previews');
   const dropText = document.getElementById('dropText');
   input.addEventListener('change', () => {
-    const f = input.files[0];
-    if (!f) return;
-    preview.src = URL.createObjectURL(f);
-    preview.hidden = false;
-    dropText.textContent = f.name;
+    previews.innerHTML = '';
+    const files = Array.from(input.files);
+    if (!files.length) return;
+    dropText.textContent = files.length === 1 ? files[0].name : ('已选择 ' + files.length + ' 张图片');
+    files.slice(0, 12).forEach(f => {
+      const img = document.createElement('img');
+      img.src = URL.createObjectURL(f);
+      previews.appendChild(img);
+    });
   });
-  document.getElementById('fileInput').closest('form').addEventListener('submit', () => {
+  input.closest('form').addEventListener('submit', () => {
     const b = document.getElementById('submitBtn');
     b.textContent = '识别中…';
     b.disabled = true;

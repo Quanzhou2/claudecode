@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}批量核对 · {{ app_name }}{% endblock %}
+{% block content %}
+{% set tt = ticket_type or 'einvoice' %}
+<div class="page-head">
+  <h1>批量核对（{{ drafts | length }} 张）</h1>
+  <span class="badge {{ 'badge-admin' if tt == 'payment' else 'badge-user' }}">
+    {{ tt | ticket_type_label }}
+  </span>
+</div>
+
+{% if skipped %}
+  <div class="alert alert-info">{{ skipped }} 个文件因格式或大小不支持已被忽略。</div>
+{% endif %}
+<p class="muted">逐条核对识别结果，将“操作”设为“跳过”可不保存该条；标记为重复的默认跳过。</p>
+
+<form method="post" action="/expenses/batch">
+  <input type="hidden" name="ticket_type" value="{{ tt }}">
+  {% for d in drafts %}
+  <div class="card batch-row">
+    <div class="batch-thumb">
+      <a href="/expenses/preview/{{ d.image_filename }}" target="_blank">
+        <img src="/expenses/preview/{{ d.image_filename }}" alt="凭证">
+      </a>
+    </div>
+    <div class="batch-fields">
+      <input type="hidden" name="image_path" value="{{ d.image_filename }}">
+      <input type="hidden" name="raw" value="{{ d.raw }}">
+
+      {% if d.duplicate %}
+        <div class="alert alert-error">⚠ 检测到重复{% if d.match_score is not none %}（图片相似度 {{ (d.match_score * 100) | round | int }}%）{% endif %}，默认跳过。</div>
+      {% elif d.match_score %}
+        <div class="alert alert-info">最高图片相似度 {{ (d.match_score * 100) | round | int }}%（未达阈值）。</div>
+      {% endif %}
+
+      <div class="form-row">
+        <label>{{ '发票号码' if tt == 'einvoice' else '支付单号 / 交易号' }}
+          <input name="number" value="{{ d.data.receipt_number or '' }}"
+                 class="{{ 'input-error' if (d.duplicate and tt != 'payment') }}">
+        </label>
+        <label>日期
+          <input name="expense_date" type="date" value="{{ d.data.expense_date or '' }}">
+        </label>
+        <label>金额
+          <input name="amount" type="number" step="0.01" value="{{ d.data.amount or '' }}">
+        </label>
+      </div>
+      <div class="form-row">
+        <label>商户
+          <input name="vendor" value="{{ d.data.vendor or '' }}">
+        </label>
+        <label>分类
+          <select name="category">
+            <option value="">—</option>
+            {% for c in categories %}
+              <option value="{{ c }}" {{ 'selected' if d.data.category == c }}>{{ c }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>币种
+          <input name="currency" value="{{ d.data.currency or default_currency }}" maxlength="8">
+        </label>
+      </div>
+      <div class="form-row">
+        <label>支付方式
+          <input name="payment_method" value="{{ d.data.payment_method or '' }}">
+        </label>
+        <label>税额
+          <input name="tax_amount" type="number" step="0.01" value="{{ d.data.tax_amount or '' }}">
+        </label>
+        <label>操作
+          <select name="action">
+            <option value="save" {{ 'selected' if not d.duplicate }}>保存</option>
+            <option value="skip" {{ 'selected' if d.duplicate }}>跳过</option>
+          </select>
+        </label>
+      </div>
+      <label>描述
+        <input name="description" value="{{ d.data.description or '' }}">
+      </label>
+    </div>
+  </div>
+  {% endfor %}
+
+  <div class="actions">
+    <button class="btn btn-primary" type="submit">保存全部</button>
+    <a class="btn-link" href="/expenses/new">取消</a>
+  </div>
+</form>
+{% endblock %}

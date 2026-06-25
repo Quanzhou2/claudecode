@@ -36,6 +36,12 @@ _ALLOWED_IMAGE_TYPES = {
     "image/webp": ".webp",
     "image/gif": ".gif",
 }
+_MAX_BATCH = 30  # max images processed per upload
+
+
+def _at(values: list[str], i: int) -> str:
+    """Safe positional access for parallel batch-form lists."""
+    return values[i] if i < len(values) else ""
 
 
 def _parse_date(v: str | None) -> date | None:
@@ -178,31 +184,20 @@ def manual_form(request: Request, user: User = Depends(require_user)):
     )
 
 
-@router.post("/expenses/extract")
-async def extract(
-    request: Request,
-    file: UploadFile = File(...),
-    ticket_type: str = Form("einvoice"),
-    user: User = Depends(require_user),
-    db: Session = Depends(get_db),
-):
-    content = await file.read()
-    if file.content_type not in _ALLOWED_IMAGE_TYPES:
-        return render(request, "expense_new.html", user=user,
-                      error="不支持的文件类型，请上传 JPG、PNG、WEBP 或 GIF 图片。")
+def _process_upload(content: bytes, content_type: str, ticket_type: str, db: Session):
+    """Save one uploaded image and extract a draft record. Returns (draft, error)."""
+    if content_type not in _ALLOWED_IMAGE_TYPES:
+        return None, "不支持的文件类型，请上传 JPG、PNG、WEBP 或 GIF 图片。"
     if len(content) > settings.max_upload_bytes:
-        return render(request, "expense_new.html", user=user,
-                      error=f"文件过大（最大 {settings.max_upload_mb} MB）。")
+        return None, f"文件过大（最大 {settings.max_upload_mb} MB）。"
 
-    ext = _ALLOWED_IMAGE_TYPES[file.content_type]
-    filename = f"{uuid.uuid4().hex}{ext}"
+    filename = f"{uuid.uuid4().hex}{_ALLOWED_IMAGE_TYPES[content_type]}"
     (settings.upload_path / filename).write_bytes(content)
 
-    extraction = extract_receipt(content, file.content_type)
+    extraction = extract_receipt(content, content_type)
     duplicate = None
     match_score = None
     if ticket_type == "payment":
-        # Compare the picture against all stored payment vouchers by similarity.
         match = svc.best_payment_match(db, perceptual_hash(content))
         if match:
             match_score = match[1]
@@ -211,11 +206,52 @@ async def extract(
     else:
         duplicate = svc.find_by_invoice_number(db, extraction.receipt_number)
 
+    return {
+        "image_filename": filename, "data": extraction,
+        "raw": extraction.model_dump_json(), "duplicate": duplicate,
+        "match_score": match_score,
+    }, None
+
+
+@router.post("/expenses/extract")
+async def extract(
+    request: Request,
+    files: list[UploadFile] = File(...),
+    ticket_type: str = Form("einvoice"),
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    # A single image keeps the focused single-review flow; multiple images go
+    # to the batch review page (one editable row per image).
+    contents = [(f.content_type, await f.read()) for f in files[:_MAX_BATCH]]
+
+    if len(contents) == 1:
+        content_type, content = contents[0]
+        draft, error = _process_upload(content, content_type, ticket_type, db)
+        if error:
+            return render(request, "expense_new.html", user=user, error=error)
+        return render(
+            request, "expense_review.html", user=user,
+            data=draft["data"], image_filename=draft["image_filename"],
+            raw=draft["raw"], duplicate=draft["duplicate"],
+            match_score=draft["match_score"], categories=svc.CATEGORIES,
+            ticket_type=ticket_type,
+        )
+
+    drafts, skipped = [], 0
+    for content_type, content in contents:
+        draft, error = _process_upload(content, content_type, ticket_type, db)
+        if draft:
+            drafts.append(draft)
+        else:
+            skipped += 1
+    if not drafts:
+        return render(request, "expense_new.html", user=user,
+                      error="没有可识别的有效图片。")
     return render(
-        request, "expense_review.html", user=user,
-        data=extraction, image_filename=filename, raw=extraction.model_dump_json(),
-        duplicate=duplicate, match_score=match_score,
-        categories=svc.CATEGORIES, ticket_type=ticket_type,
+        request, "expense_batch_review.html", user=user,
+        drafts=drafts, skipped=skipped, categories=svc.CATEGORIES,
+        ticket_type=ticket_type,
     )
 
 
@@ -302,6 +338,66 @@ def create(
     audit.log(db, user, "create_expense", "expense", expense.id,
               f"{ticket_type} amount={expense.amount} {expense.currency}")
     return RedirectResponse(f"/expenses/{expense.id}", status_code=303)
+
+
+@router.post("/expenses/batch")
+def batch_create(
+    request: Request,
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+    ticket_type: str = Form("einvoice"),
+    number: list[str] = Form([]),
+    image_path: list[str] = Form([]),
+    vendor: list[str] = Form([]),
+    expense_date: list[str] = Form([]),
+    amount: list[str] = Form([]),
+    currency: list[str] = Form([]),
+    category: list[str] = Form([]),
+    payment_method: list[str] = Form([]),
+    tax_amount: list[str] = Form([]),
+    description: list[str] = Form([]),
+    action: list[str] = Form([]),
+    raw: list[str] = Form([]),
+):
+    saved, skipped = [], []
+    for i in range(len(number)):  # one row per submitted number field
+        if _at(action, i) == "skip":
+            skipped.append((_at(number, i) or _at(vendor, i) or f"第 {i + 1} 项", "已跳过"))
+            continue
+        image_name = _safe_upload_name(_at(image_path, i)) if _at(image_path, i) else None
+        common = dict(
+            vendor=_at(vendor, i), expense_date=_parse_date(_at(expense_date, i)),
+            amount=_parse_float(_at(amount, i)) or 0,
+            currency=_at(currency, i) or settings.default_currency,
+            category=_at(category, i), payment_method=_at(payment_method, i),
+            tax_amount=_parse_float(_at(tax_amount, i)), description=_at(description, i),
+            image_path=image_name,
+        )
+        try:
+            if ticket_type == "payment":
+                phash = None
+                if image_name:
+                    img = settings.upload_path / image_name
+                    if img.exists():
+                        phash = perceptual_hash(img.read_bytes())
+                e = svc.create_payment(
+                    db, user, image_phash=phash, payment_number=_at(number, i),
+                    raw=_at(raw, i) or None, **common,
+                )
+            else:
+                e = svc.create_einvoice(
+                    db, user, invoice_number=_at(number, i),
+                    raw=_at(raw, i) or None, **common,
+                )
+            saved.append(e)
+            audit.log(db, user, "create_expense", "expense", e.id,
+                      f"{ticket_type} (batch)")
+        except svc.ExpenseError as exc:
+            skipped.append((_at(number, i) or _at(vendor, i) or f"第 {i + 1} 项", str(exc)))
+    return render(
+        request, "expense_batch_result.html", user=user,
+        saved=saved, skipped=skipped, ticket_type=ticket_type,
+    )
 
 
 # --------------------------------------------------------------------------- #
