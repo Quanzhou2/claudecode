@@ -62,6 +62,60 @@ class AnalysisResult:
     error: str | None = None
 
 
+def build_chart(columns: list[str], rows: list[list], *, max_bars: int = 30) -> dict | None:
+    """Turn a tabular result into a simple bar chart spec, or None.
+
+    Picks the last all-numeric column as the value and the first non-numeric
+    column as the label, so "category/month vs amount" style results plot well.
+    """
+    if not columns or not rows or len(rows) > max_bars:
+        return None
+    ncol = len(columns)
+
+    def col_is_numeric(j: int) -> bool:
+        vals = [r[j] for r in rows if j < len(r) and r[j] is not None]
+        if not vals:
+            return False
+        for v in vals:
+            try:
+                float(v)
+            except (TypeError, ValueError):
+                return False
+        return True
+
+    numeric = [j for j in range(ncol) if col_is_numeric(j)]
+    if not numeric:
+        return None
+    value_idx = numeric[-1]
+    label_idx = next((j for j in range(ncol) if j not in numeric), None)
+    if label_idx is None:
+        label_idx = next((j for j in range(ncol) if j != value_idx), None)
+
+    items = []
+    for i, r in enumerate(rows):
+        try:
+            value = float(r[value_idx])
+        except (TypeError, ValueError, IndexError):
+            continue
+        if label_idx is not None and label_idx < len(r) and r[label_idx] is not None:
+            label = str(r[label_idx])
+        else:
+            label = f"#{i + 1}"
+        items.append((label, value))
+    if not items:
+        return None
+
+    mx = max((abs(v) for _, v in items), default=0.0) or 1.0
+    return {
+        "value_label": columns[value_idx],
+        "label_label": columns[label_idx] if label_idx is not None else "",
+        "bars": [
+            {"label": lbl, "value": val, "pct": round(abs(val) / mx * 100, 1)}
+            for lbl, val in items
+        ],
+    }
+
+
 def is_safe_select(sql: str) -> bool:
     """Allow exactly one read-only SELECT/CTE statement."""
     stripped = sql.strip().rstrip(";").strip()

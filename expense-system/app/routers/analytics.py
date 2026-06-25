@@ -4,9 +4,10 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Form, Request
 from sqlalchemy.orm import Session
 
+from ..config import get_settings
 from ..database import get_db
 from ..deps import require_user
-from ..llm.analysis import analyze
+from ..llm.analysis import analyze, build_chart
 from ..models import User
 from ..services import expenses as svc
 from ..templating import render
@@ -24,7 +25,8 @@ SUGGESTED = [
 
 @router.get("/analytics")
 def analytics_form(request: Request, user: User = Depends(require_user)):
-    return render(request, "analytics.html", user=user, suggested=SUGGESTED)
+    return render(request, "analytics.html", user=user, suggested=SUGGESTED,
+                  llm_model=get_settings().llm_model)
 
 
 @router.post("/analytics")
@@ -36,7 +38,9 @@ def analytics_query(
 ):
     rows = svc.rows_for_analysis(db, user)
     result = analyze(question.strip(), rows) if question.strip() else None
+    chart = build_chart(result.columns, result.rows) if result else None
     return render(
         request, "analytics.html", user=user,
-        suggested=SUGGESTED, result=result, question=question, scope_count=len(rows),
+        suggested=SUGGESTED, result=result, chart=chart, question=question,
+        scope_count=len(rows), llm_model=get_settings().llm_model,
     )

@@ -21,7 +21,7 @@ analysis falls back to built-in aggregations.
 | 🔐 **Accounts & roles** | Register / login with signed-cookie sessions and bcrypt-hashed passwords. Two roles: **user** (create & view own records) and **admin** (view/edit *all* records, review, manage users, and **submit on behalf of any user** via a submitter selector). |
 | 📷 **Receipt & payment recognition** | Three input modes on the *New* tab: **upload image(s)** (one, or **many at once** → a batch review where each row is editable and duplicates are flagged), **paste text** (copied order/bill details), or **manual entry**. The LLM extracts the core fields (vendor, date, amount, currency, category, **payment method**, tax, unique number) **plus every other field it can read** off an e-invoice (买方/卖方名称 + 纳税人识别号, 发票代码, 校验码, 价税合计大写, 开票人, 备注, line items, …) into a flexible **extra-fields** map shown on the record. You review & confirm before saving. Handles paper invoices **and** Chinese mobile-payment / e-commerce screenshots — WeChat Pay, Alipay, Pinduoduo, JD, Taobao/Tmall, WeChat Mini Shop — mapping their varied fields (订单编号/交易单号/商户单号 → receipt no., 实付/实付款/合计 → amount, 支付时间 → date) and normalizing negative bill amounts. |
 | 🚫 **Duplicate detection** | Two strategies by ticket type, stored in separate tables: **e-invoices** dedup on the normalized invoice number (exact, globally unique); **payment vouchers** dedup by **visual similarity** — a perceptual hash (dHash) is compared against every stored voucher and a match ≥ the configurable threshold (default 80%) is blocked, with the **similarity score shown**. Catches re-screenshots / re-compressions that an exact hash would miss, across all users. |
-| 🤖 **AI query & analysis** | Ask questions in plain language ("spend by category this quarter"). The LLM writes a read-only SQL query that runs against an **isolated, permission-scoped sandbox**, then summarizes the result. |
+| 🤖 **AI query & analysis** | Ask questions in plain language ("spend by category this quarter"). The LLM writes a read-only SQL query that runs against an **isolated, permission-scoped sandbox**, then returns a **conclusion**, an auto-built **bar chart**, and the data table. Shows the active model; falls back to built-in aggregations on error/offline. |
 | ✅ **Approval workflow** | Records flow through `pending → approved / rejected / paid`. Admins review with an optional note; owners can edit only while `pending`. |
 | 📊 **Dashboard** | Per-role summary cards plus spend-by-month and spend-by-category charts. |
 | 🔎 **Search / filter / export** | Filter by status, category, date range and free text; paginate; export to CSV. |
@@ -115,7 +115,15 @@ All settings come from environment variables (or a `.env` file). See
 | DeepSeek | `https://api.deepseek.com/v1` | `deepseek-chat` |
 | Qwen (DashScope) | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `qwen-plus` / `qwen-vl-plus` |
 | Moonshot | `https://api.moonshot.cn/v1` | `moonshot-v1-8k` / `moonshot-v1-8k-vision-preview` |
+| OpenRouter | `https://openrouter.ai/api/v1` | `deepseek/deepseek-chat` / `qwen/qwen-2-vl-7b-instruct` |
 | Ollama (local) | `http://localhost:11434/v1` | `llama3.1` / `llama3.2-vision` |
+
+> **`404 No allowed providers are available for the selected model`** (and similar
+> "provider/model not available" errors) mean your **key works but `LLM_MODEL`
+> isn't served by your gateway** — not a key problem. Set `LLM_MODEL` (and
+> `LLM_VISION_MODEL` for OCR) to a model your account/gateway actually offers
+> (e.g. on OpenRouter use a `provider/model` name like `deepseek/deepseek-chat`).
+> The Analyze page shows the current model and falls back to built-in stats on error.
 
 Receipt OCR requires the configured **vision** model to accept image input.
 

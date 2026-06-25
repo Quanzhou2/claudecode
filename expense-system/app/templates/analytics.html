@@ -20,14 +20,41 @@
       {% endfor %}
     </div>
     <button class="btn btn-primary" type="submit">开始分析</button>
+    {% if llm_enabled and llm_model %}
+      <p class="muted" style="margin-top:.6rem">当前对话模型：<code>{{ llm_model }}</code></p>
+    {% endif %}
   </form>
 </div>
 
 {% if result %}
 <div class="card">
   <h2>分析结果</h2>
-  {% if result.error %}<div class="alert alert-error">{{ result.error }}</div>{% endif %}
-  {% if result.summary %}<p class="summary">{{ result.summary }}</p>{% endif %}
+  {% if result.error %}
+    <div class="alert alert-error">
+      {{ result.error }}
+      {% if ('404' in result.error) or ('provider' in result.error|lower) or ('model' in result.error|lower) %}
+        <br><span class="muted">提示：当前对话模型为 <code>{{ llm_model }}</code>，
+        请确认你的服务商支持该模型，并在 <code>.env</code> 中相应设置
+        <code>LLM_MODEL</code>（如 <code>deepseek/deepseek-chat</code>）。已为你回退到内置统计。</span>
+      {% endif %}
+    </div>
+  {% endif %}
+  {% if result.summary %}<p class="summary"><strong>结论：</strong>{{ result.summary }}</p>{% endif %}
+
+  {% if chart %}
+  <div class="chart-block">
+    <h3 class="muted">图表：{{ chart.label_label }} × {{ chart.value_label }}</h3>
+    <div class="bars">
+      {% for it in chart.bars %}
+      <div class="bar-row">
+        <span class="bar-label" title="{{ it.label }}">{{ it.label }}</span>
+        <span class="bar-track"><span class="bar-fill" style="width: {{ it.pct }}%"></span></span>
+        <span class="bar-value">{{ it.value | money }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
 
   {% if result.used_llm and result.sql %}
     <details class="sql-box">

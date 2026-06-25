@@ -150,6 +150,8 @@ form { margin: 0; }
 .chip { background: #eef1f8; border: 1px solid var(--line); border-radius: 20px; padding: .35rem .8rem; font-size: .85rem; cursor: pointer; color: var(--ink); }
 .chip:hover { background: #e2e8f6; }
 .summary { font-size: 1.05rem; background: #f7f9ff; border-left: 3px solid var(--primary); padding: .75rem 1rem; border-radius: 6px; }
+.chart-block { margin: 1rem 0; }
+.chart-block h3 { font-size: .85rem; margin: 0 0 .5rem; font-weight: 600; }
 .sql-box { margin: .75rem 0; }
 .sql-box pre { background: #1f2733; color: #e6edf3; padding: .8rem; border-radius: 8px; overflow-x: auto; font-size: .85rem; }
 .review-form { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }

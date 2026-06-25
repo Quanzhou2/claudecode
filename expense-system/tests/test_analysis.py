@@ -1,6 +1,19 @@
 from _fakes import FakeAnalysisClient
 
-from app.llm.analysis import analyze, is_safe_select
+from app.llm.analysis import analyze, build_chart, is_safe_select
+
+
+def test_build_chart_picks_label_and_value():
+    chart = build_chart(["分类", "笔数", "合计金额"], [["餐饮", 3, 126.5], ["交通", 1, 12.0]])
+    assert chart["label_label"] == "分类"
+    assert chart["value_label"] == "合计金额"   # last numeric column
+    assert chart["bars"][0] == {"label": "餐饮", "value": 126.5, "pct": 100.0}
+    assert chart["bars"][1]["pct"] < 100.0
+
+
+def test_build_chart_none_when_no_numeric_or_too_many_rows():
+    assert build_chart(["a", "b"], [["x", "y"]]) is None
+    assert build_chart(["c", "v"], [[f"c{i}", i] for i in range(40)]) is None
 
 ROWS = [
     {"id": 1, "owner": "alice", "receipt_number": "R1", "vendor": "Sky Cafe",
