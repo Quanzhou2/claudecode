@@ -80,37 +80,31 @@ class User(Base):
 
 
 class Expense(Base):
-    """A single reimbursement record."""
+    """Base reimbursement record holding fields common to both ticket types.
+
+    Joined-table inheritance: the two voucher kinds live in their own tables —
+    ``e_invoices`` (deduped by invoice number) and ``payment_vouchers``
+    (deduped by image similarity) — while sharing the common reimbursement and
+    review-workflow fields here.
+    """
 
     __tablename__ = "expenses"
-    # Receipt numbers are globally unique to prevent the same physical
-    # receipt being reimbursed twice (even across different users).
-    # The image hash blocks the same payment screenshot being submitted twice.
-    __table_args__ = (
-        UniqueConstraint("receipt_number", name="uq_expenses_receipt_number"),
-        UniqueConstraint("image_hash", name="uq_expenses_image_hash"),
-    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # Discriminator: "einvoice" | "payment".
+    ticket_type: Mapped[str] = mapped_column(String(16), index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
 
-    # "einvoice" (extract fields, dedup by receipt_number) or
-    # "payment" (store the picture, dedup by image_hash).
-    ticket_type: Mapped[str] = mapped_column(String(16), default="einvoice", index=True)
-    receipt_number: Mapped[str | None] = mapped_column(String(128), index=True)
     vendor: Mapped[str | None] = mapped_column(String(255))
     expense_date: Mapped[date | None] = mapped_column(Date, index=True)
     amount: Mapped[float] = mapped_column(Float, default=0.0)
     currency: Mapped[str] = mapped_column(String(8), default="CNY")
     category: Mapped[str | None] = mapped_column(String(64), index=True)
     tax_amount: Mapped[float | None] = mapped_column(Float)
-    # How it was paid, incl. platform + channel, e.g. "微信支付·零钱",
-    # "支付宝·余额宝", "拼多多·多多支付", "京东·微信支付".
+    # How it was paid, incl. platform + channel, e.g. "微信支付·零钱".
     payment_method: Mapped[str | None] = mapped_column(String(64))
     description: Mapped[str | None] = mapped_column(Text)
     image_path: Mapped[str | None] = mapped_column(String(512))
-    # SHA-256 of the uploaded image bytes; used to detect duplicate vouchers.
-    image_hash: Mapped[str | None] = mapped_column(String(64), index=True)
 
     status: Mapped[ExpenseStatus] = mapped_column(
         Enum(ExpenseStatus), default=ExpenseStatus.pending, index=True
@@ -131,6 +125,41 @@ class Expense(Base):
         back_populates="expenses", foreign_keys=[user_id]
     )
     reviewer: Mapped["User | None"] = relationship(foreign_keys=[reviewer_id])
+
+    __mapper_args__ = {
+        "polymorphic_on": ticket_type,
+        "polymorphic_identity": "expense",
+        # Always load subclass columns so base queries (list/dashboard/analytics)
+        # return fully-populated EInvoice / PaymentVoucher instances.
+        "with_polymorphic": "*",
+    }
+
+
+class EInvoice(Expense):
+    """E-invoice: fields extracted from the image, deduped by invoice number."""
+
+    __tablename__ = "e_invoices"
+    __table_args__ = (
+        UniqueConstraint("invoice_number", name="uq_einvoice_invoice_number"),
+    )
+
+    id: Mapped[int] = mapped_column(ForeignKey("expenses.id"), primary_key=True)
+    invoice_number: Mapped[str | None] = mapped_column(String(128), index=True)
+
+    __mapper_args__ = {"polymorphic_identity": "einvoice"}
+
+
+class PaymentVoucher(Expense):
+    """Payment screenshot: the picture is stored and deduped by visual similarity."""
+
+    __tablename__ = "payment_vouchers"
+
+    id: Mapped[int] = mapped_column(ForeignKey("expenses.id"), primary_key=True)
+    payment_number: Mapped[str | None] = mapped_column(String(128), index=True)
+    # Perceptual (dHash) hash of the image for similarity comparison.
+    image_phash: Mapped[str | None] = mapped_column(String(32), index=True)
+
+    __mapper_args__ = {"polymorphic_identity": "payment"}
 
 
 class AuditLog(Base):

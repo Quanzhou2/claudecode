@@ -19,10 +19,17 @@
 {% if duplicate %}
   <div class="alert alert-error">
     ⚠ <strong>检测到重复凭证</strong>
+    {% if match_score is not none %}（图片相似度 {{ (match_score * 100) | round | int }}%）{% endif %}
     {% if current_user.is_admin %}
       （已存在记录 #{{ duplicate.id }}，提交人 {{ duplicate.owner.username }}，
       状态 {{ duplicate.status | status_label }}）{% endif %}。
-    为防止重复报销，系统会拦截相同的<strong>发票号码</strong>或<strong>凭证图片</strong>。
+    {% if (ticket_type or 'einvoice') == 'payment' %}支付凭证按<strong>图片相似度</strong>查重{% else %}电子发票按<strong>发票号码</strong>查重{% endif %}，
+    为防止重复报销已拦截。
+  </div>
+{% elif match_score %}
+  <div class="alert alert-info">
+    与已有支付凭证的最高图片相似度为 <strong>{{ (match_score * 100) | round | int }}%</strong>，
+    未达到重复阈值，可继续保存。
   </div>
 {% endif %}
 
@@ -33,9 +40,9 @@
       <input type="hidden" name="raw" value="{{ raw or '' }}">
       <input type="hidden" name="ticket_type" value="{{ ticket_type or 'einvoice' }}">
 
-      <label>{{ '发票号码（电子发票必填）' if (ticket_type or 'einvoice') == 'einvoice' else '发票号码 / 交易号（选填）' }}
-        <input name="receipt_number" value="{{ data.receipt_number or '' }}"
-               class="{{ 'input-error' if duplicate }}">
+      <label>{{ '发票号码（电子发票必填）' if (ticket_type or 'einvoice') == 'einvoice' else '支付单号 / 交易号（选填）' }}
+        <input name="number" value="{{ data.receipt_number or '' }}"
+               class="{{ 'input-error' if (duplicate and (ticket_type or 'einvoice') != 'payment') }}">
       </label>
       <div class="form-row">
         <label>日期
@@ -79,10 +86,10 @@
   </div>
 
   <div class="card">
-    <h2>发票图片</h2>
+    <h2>凭证图片</h2>
     {% if image_filename %}
       <a href="/expenses/preview/{{ image_filename }}" target="_blank">
-        <img class="receipt-img" src="/expenses/preview/{{ image_filename }}" alt="发票">
+        <img class="receipt-img" src="/expenses/preview/{{ image_filename }}" alt="凭证">
       </a>
     {% else %}
       <p class="muted">无图片。</p>

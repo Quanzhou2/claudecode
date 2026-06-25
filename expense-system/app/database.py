@@ -38,46 +38,94 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def init_db() -> None:
-    """Create all tables. Import models first so they register on Base."""
+    """Create all tables and migrate any legacy single-table schema in place."""
     from . import models  # noqa: F401  (ensures models are imported)
 
+    legacy_rows = _legacy_extract_and_drop()
     Base.metadata.create_all(bind=engine)
-    _run_light_migrations()
+    if legacy_rows:
+        _legacy_insert(legacy_rows)
 
 
-# Columns that may be missing on databases created by an earlier version.
-# (table, column, column DDL type)
-_ADDED_COLUMNS = [
-    ("expenses", "payment_method", "VARCHAR(64)"),
-    ("expenses", "ticket_type", "VARCHAR(16) DEFAULT 'einvoice'"),
-    ("expenses", "image_hash", "VARCHAR(64)"),
-]
-
-# Unique indexes to ensure on pre-existing tables. (name, table, column)
-_ADDED_UNIQUE_INDEXES = [
-    ("uq_expenses_image_hash", "expenses", "image_hash"),
-]
+def _is_sqlite() -> bool:
+    return engine.dialect.name == "sqlite"
 
 
-def _run_light_migrations() -> None:
-    """Add new nullable columns / indexes to pre-existing SQLite tables in place.
+def _legacy_extract_and_drop() -> list[dict] | None:
+    """Read rows from an old single-table `expenses` then drop it (SQLite only).
 
-    SQLAlchemy's create_all never ALTERs existing tables, so without this an
-    upgraded app would crash on the new column. Only runs for SQLite; for other
-    backends use a real migration tool.
+    Dropping the table (rather than renaming it) clears its indexes too, so the
+    fresh joined-inheritance tables can be created without index-name clashes.
+    Detected by the presence of the old `receipt_number` column.
     """
-    if engine.dialect.name != "sqlite":
-        return
+    if not _is_sqlite():
+        return None
+
+    def _table_exists(conn, name: str) -> bool:
+        return bool(conn.exec_driver_sql(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=:n", {"n": name}
+        ).first())
+
+    def _has_col(conn, table: str, col: str) -> bool:
+        return col in {r[1] for r in conn.exec_driver_sql(f"PRAGMA table_info({table})")}
+
     with engine.begin() as conn:
-        for table, column, ddl in _ADDED_COLUMNS:
-            cols = {row[1] for row in conn.exec_driver_sql(f"PRAGMA table_info({table})")}
-            if cols and column not in cols:
+        # The legacy single-table data is in `expenses` (clean upgrade) or in
+        # `expenses_legacy` (recovering from an aborted earlier migration).
+        if _table_exists(conn, "expenses") and _has_col(conn, "expenses", "receipt_number"):
+            source = "expenses"
+        elif _table_exists(conn, "expenses_legacy"):
+            source = "expenses_legacy"
+        else:
+            return None
+        rows = [dict(r) for r in conn.exec_driver_sql(f"SELECT * FROM {source}").mappings()]
+        # Drop the old table(s) so create_all can build the new schema cleanly.
+        conn.exec_driver_sql("DROP TABLE IF EXISTS expenses_legacy")
+        if source == "expenses":
+            conn.exec_driver_sql("DROP TABLE expenses")
+        elif _table_exists(conn, "expenses"):
+            # Half-created new base table from an aborted run — start it fresh.
+            conn.exec_driver_sql("DROP TABLE IF EXISTS e_invoices")
+            conn.exec_driver_sql("DROP TABLE IF EXISTS payment_vouchers")
+            conn.exec_driver_sql("DROP TABLE expenses")
+    return rows
+
+
+def _legacy_insert(rows: list[dict]) -> None:
+    """Insert previously-extracted single-table rows into the new tables."""
+    base_cols = (
+        "ticket_type", "user_id", "vendor", "expense_date", "amount", "currency",
+        "category", "tax_amount", "payment_method", "description", "image_path",
+        "status", "reviewer_id", "review_comment", "reviewed_at", "extracted_raw",
+        "created_at", "updated_at",
+    )
+    placeholders = ", ".join(f":{c}" for c in base_cols)
+    insert_base = (
+        f"INSERT INTO expenses ({', '.join(base_cols)}) VALUES ({placeholders})"
+    )
+    from datetime import datetime
+
+    now = datetime.utcnow().isoformat(sep=" ", timespec="seconds")
+    with engine.begin() as conn:
+        for r in rows:
+            ticket_type = r.get("ticket_type") or "einvoice"
+            params = {c: r.get(c) for c in base_cols}
+            # Backfill NOT NULL columns in case the legacy row had gaps.
+            params["ticket_type"] = ticket_type
+            params["amount"] = r.get("amount") or 0
+            params["currency"] = r.get("currency") or "CNY"
+            params["status"] = r.get("status") or "pending"
+            params["created_at"] = r.get("created_at") or now
+            params["updated_at"] = r.get("updated_at") or now
+            new_id = conn.exec_driver_sql(insert_base, params).lastrowid
+            if ticket_type == "payment":
                 conn.exec_driver_sql(
-                    f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"
+                    "INSERT INTO payment_vouchers (id, payment_number, image_phash) "
+                    "VALUES (:id, :pn, NULL)",
+                    {"id": new_id, "pn": r.get("receipt_number")},
                 )
-        for name, table, column in _ADDED_UNIQUE_INDEXES:
-            # Multiple NULLs are allowed by SQLite unique indexes, which is what
-            # we want (records without an image simply aren't image-deduped).
-            conn.exec_driver_sql(
-                f"CREATE UNIQUE INDEX IF NOT EXISTS {name} ON {table}({column})"
-            )
+            else:
+                conn.exec_driver_sql(
+                    "INSERT INTO e_invoices (id, invoice_number) VALUES (:id, :inv)",
+                    {"id": new_id, "inv": r.get("receipt_number")},
+                )

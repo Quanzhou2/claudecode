@@ -26,7 +26,8 @@ SCHEMA_COLUMNS = [
     ("id", "INTEGER"),
     ("owner", "TEXT"),  # username of the submitter
     ("ticket_type", "TEXT"),  # einvoice / payment
-    ("receipt_number", "TEXT"),
+    ("invoice_number", "TEXT"),
+    ("payment_number", "TEXT"),
     ("vendor", "TEXT"),
     ("expense_date", "TEXT"),  # ISO YYYY-MM-DD
     ("amount", "REAL"),

@@ -1,14 +1,22 @@
-"""Core reimbursement business logic: CRUD, scoping, duplicates, stats."""
+"""Core reimbursement business logic: CRUD, scoping, duplicates, stats.
+
+Two voucher types live in their own tables:
+- **EInvoice** — deduplicated by invoice number (exact).
+- **PaymentVoucher** — deduplicated by image *similarity* (perceptual hash),
+  reporting a similarity score.
+"""
 from __future__ import annotations
 
 from collections import OrderedDict
 from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..models import TICKET_TYPES, Expense, ExpenseStatus, User
+from ..config import get_settings
+from ..imaging import similarity
+from ..models import EInvoice, Expense, ExpenseStatus, PaymentVoucher, User
 
 CATEGORIES = [
     "餐饮", "差旅", "交通", "住宿", "办公",
@@ -28,17 +36,21 @@ class DuplicateError(ExpenseError):
         super().__init__(message)
 
 
-class DuplicateReceiptError(DuplicateError):
-    def __init__(self, receipt_number: str, existing: Expense):
-        self.receipt_number = receipt_number
+class DuplicateInvoiceError(DuplicateError):
+    def __init__(self, invoice_number: str, existing: Expense):
+        self.invoice_number = invoice_number
         super().__init__(
-            f"发票号码 '{receipt_number}' 已被提交过，不能重复报销。", existing
+            f"发票号码 '{invoice_number}' 已被提交过，不能重复报销。", existing
         )
 
 
 class DuplicateImageError(DuplicateError):
-    def __init__(self, existing: Expense):
-        super().__init__("该支付凭证图片已存在，不能重复报销。", existing)
+    def __init__(self, existing: Expense, score: float):
+        self.similarity = score
+        super().__init__(
+            f"该支付凭证与已有凭证高度相似（相似度 {round(score * 100)}%），疑似重复报销。",
+            existing,
+        )
 
 
 class PermissionDenied(ExpenseError):
@@ -46,61 +58,49 @@ class PermissionDenied(ExpenseError):
 
 
 # --------------------------------------------------------------------------- #
-# Receipt-number normalization & duplicate detection
+# Numbers, image similarity & lookups
 # --------------------------------------------------------------------------- #
-def normalize_receipt_number(value: str | None) -> str | None:
+def normalize_number(value: str | None) -> str | None:
     if not value:
         return None
     cleaned = "".join(value.split()).upper()
     return cleaned or None
 
 
-def find_by_receipt_number(db: Session, receipt_number: str | None) -> Expense | None:
-    norm = normalize_receipt_number(receipt_number)
+def record_number(e: Expense) -> str | None:
+    """The dedup/display number for either voucher type."""
+    return getattr(e, "invoice_number", None) or getattr(e, "payment_number", None)
+
+
+def find_by_invoice_number(db: Session, invoice_number: str | None) -> EInvoice | None:
+    norm = normalize_number(invoice_number)
     if not norm:
         return None
-    return db.scalar(select(Expense).where(Expense.receipt_number == norm))
+    return db.scalar(select(EInvoice).where(EInvoice.invoice_number == norm))
 
 
-def find_by_image_hash(db: Session, image_hash: str | None) -> Expense | None:
-    if not image_hash:
+def best_payment_match(
+    db: Session, phash: str | None
+) -> tuple[PaymentVoucher, float] | None:
+    """Return the most visually-similar existing payment voucher and its score."""
+    if not phash:
         return None
-    return db.scalar(select(Expense).where(Expense.image_hash == image_hash))
-
-
-def _normalize_ticket_type(value: str | None) -> str:
-    value = (value or "einvoice").strip()
-    return value if value in TICKET_TYPES else "einvoice"
+    best: PaymentVoucher | None = None
+    best_score = 0.0
+    for pv in db.scalars(
+        select(PaymentVoucher).where(PaymentVoucher.image_phash.is_not(None))
+    ):
+        score = similarity(phash, pv.image_phash)
+        if score > best_score:
+            best_score, best = score, pv
+    return (best, best_score) if best is not None else None
 
 
 # --------------------------------------------------------------------------- #
-# Create / update
+# Create (one path per voucher type)
 # --------------------------------------------------------------------------- #
-def create_expense(db: Session, owner: User, *, raw: str | None = None, **fields: Any) -> Expense:
-    ticket_type = _normalize_ticket_type(fields.get("ticket_type"))
-    receipt_number = normalize_receipt_number(fields.get("receipt_number"))
-    image_hash = (fields.get("image_hash") or "").strip() or None
-
-    # Each type must carry the key it is deduplicated by.
-    if ticket_type == "einvoice" and not receipt_number:
-        raise ExpenseError("电子发票需要填写发票号码（用于查重）。")
-    if ticket_type == "payment" and not image_hash:
-        raise ExpenseError("支付凭证需要上传图片（用于查重）。")
-
-    # Duplicate detection: by invoice/transaction number AND by image content.
-    if receipt_number:
-        existing = find_by_receipt_number(db, receipt_number)
-        if existing:
-            raise DuplicateReceiptError(receipt_number, existing)
-    if image_hash:
-        existing_img = find_by_image_hash(db, image_hash)
-        if existing_img:
-            raise DuplicateImageError(existing_img)
-
-    expense = Expense(
-        user_id=owner.id,
-        ticket_type=ticket_type,
-        receipt_number=receipt_number,
+def _common_fields(fields: dict[str, Any]) -> dict[str, Any]:
+    return dict(
         vendor=(fields.get("vendor") or "").strip() or None,
         expense_date=fields.get("expense_date"),
         amount=float(fields.get("amount") or 0),
@@ -110,16 +110,57 @@ def create_expense(db: Session, owner: User, *, raw: str | None = None, **fields
         tax_amount=fields.get("tax_amount"),
         description=(fields.get("description") or "").strip() or None,
         image_path=fields.get("image_path"),
-        image_hash=image_hash,
-        extracted_raw=raw,
-        status=ExpenseStatus.pending,
     )
-    db.add(expense)
+
+
+def create_einvoice(
+    db: Session, owner: User, *, invoice_number: str | None,
+    raw: str | None = None, **fields: Any,
+) -> EInvoice:
+    num = normalize_number(invoice_number)
+    if not num:
+        raise ExpenseError("电子发票需要填写发票号码（用于查重）。")
+    existing = find_by_invoice_number(db, num)
+    if existing:
+        raise DuplicateInvoiceError(num, existing)
+
+    e = EInvoice(
+        user_id=owner.id, invoice_number=num, status=ExpenseStatus.pending,
+        extracted_raw=raw, **_common_fields(fields),
+    )
+    db.add(e)
     db.commit()
-    db.refresh(expense)
-    return expense
+    db.refresh(e)
+    return e
 
 
+def create_payment(
+    db: Session, owner: User, *, image_phash: str | None, payment_number: str | None = None,
+    raw: str | None = None, threshold: float | None = None, **fields: Any,
+) -> PaymentVoucher:
+    if not image_phash:
+        raise ExpenseError("支付凭证需要上传图片（用于查重）。")
+    if threshold is None:
+        threshold = get_settings().image_similarity_threshold
+
+    match = best_payment_match(db, image_phash)
+    if match and match[1] >= threshold:
+        raise DuplicateImageError(match[0], match[1])
+
+    pv = PaymentVoucher(
+        user_id=owner.id, payment_number=normalize_number(payment_number),
+        image_phash=image_phash, status=ExpenseStatus.pending, extracted_raw=raw,
+        **_common_fields(fields),
+    )
+    db.add(pv)
+    db.commit()
+    db.refresh(pv)
+    return pv
+
+
+# --------------------------------------------------------------------------- #
+# Permissions / fetch / update / review / delete
+# --------------------------------------------------------------------------- #
 def can_view(user: User, expense: Expense) -> bool:
     return user.is_admin or expense.user_id == user.id
 
@@ -127,7 +168,6 @@ def can_view(user: User, expense: Expense) -> bool:
 def can_edit(user: User, expense: Expense) -> bool:
     if user.is_admin:
         return True
-    # Owners may edit only while the record is still pending.
     return expense.user_id == user.id and expense.status == ExpenseStatus.pending
 
 
@@ -144,13 +184,17 @@ def update_expense(db: Session, user: User, expense: Expense, **fields: Any) -> 
     if not can_edit(user, expense):
         raise PermissionDenied("您无权编辑该记录。")
 
-    if "receipt_number" in fields:
-        new_rn = normalize_receipt_number(fields["receipt_number"])
-        if new_rn and new_rn != expense.receipt_number:
-            clash = find_by_receipt_number(db, new_rn)
+    if isinstance(expense, EInvoice) and "invoice_number" in fields:
+        new_num = normalize_number(fields["invoice_number"])
+        if not new_num:
+            raise ExpenseError("电子发票需要填写发票号码。")
+        if new_num != expense.invoice_number:
+            clash = find_by_invoice_number(db, new_num)
             if clash and clash.id != expense.id:
-                raise DuplicateReceiptError(new_rn, clash)
-        expense.receipt_number = new_rn
+                raise DuplicateInvoiceError(new_num, clash)
+        expense.invoice_number = new_num
+    if isinstance(expense, PaymentVoucher) and "payment_number" in fields:
+        expense.payment_number = normalize_number(fields["payment_number"])
 
     for attr in ("vendor", "category", "description", "payment_method"):
         if attr in fields:
@@ -191,7 +235,7 @@ def delete_expense(db: Session, user: User, expense: Expense) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Listing (scoped, filtered, paginated)
+# Listing (scoped, filtered, paginated) — base query returns both types
 # --------------------------------------------------------------------------- #
 def _scoped_query(user: User):
     stmt = select(Expense)
@@ -214,7 +258,6 @@ def list_expenses(
     page_size: int = 20,
 ) -> tuple[list[Expense], int]:
     stmt = _scoped_query(user)
-
     if status:
         stmt = stmt.where(Expense.status == ExpenseStatus(status))
     if category:
@@ -225,21 +268,21 @@ def list_expenses(
         stmt = stmt.where(Expense.expense_date >= date_from)
     if date_to:
         stmt = stmt.where(Expense.expense_date <= date_to)
-    if q:
-        like = f"%{q.strip()}%"
-        stmt = stmt.where(
-            or_(
-                Expense.vendor.ilike(like),
-                Expense.receipt_number.ilike(like),
-                Expense.description.ilike(like),
-            )
-        )
 
-    all_rows = list(db.scalars(stmt.order_by(Expense.created_at.desc())))
-    total = len(all_rows)
+    rows = list(db.scalars(stmt.order_by(Expense.created_at.desc())))
+    if q:
+        ql = q.strip().lower()
+        rows = [
+            e for e in rows
+            if ql in " ".join(
+                filter(None, [e.vendor, e.description, record_number(e)])
+            ).lower()
+        ]
+
+    total = len(rows)
     page = max(1, page)
     start = (page - 1) * page_size
-    return all_rows[start : start + page_size], total
+    return rows[start : start + page_size], total
 
 
 # --------------------------------------------------------------------------- #
@@ -254,7 +297,8 @@ def rows_for_analysis(db: Session, user: User) -> list[dict]:
                 "id": e.id,
                 "owner": e.owner.username if e.owner else None,
                 "ticket_type": e.ticket_type,
-                "receipt_number": e.receipt_number,
+                "invoice_number": getattr(e, "invoice_number", None),
+                "payment_number": getattr(e, "payment_number", None),
                 "vendor": e.vendor,
                 "expense_date": e.expense_date.isoformat() if e.expense_date else None,
                 "amount": float(e.amount or 0),
@@ -283,7 +327,7 @@ def dashboard_stats(db: Session, user: User, *, months: int = 6) -> dict:
 
     for e in rows:
         by_status[e.status.value] += 1
-        cat = e.category or "Uncategorized"
+        cat = e.category or "未分类"
         by_category[cat] = by_category.get(cat, 0.0) + float(e.amount or 0)
         if e.expense_date:
             key = e.expense_date.strftime("%Y-%m")

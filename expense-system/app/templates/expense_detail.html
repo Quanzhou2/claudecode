@@ -22,7 +22,11 @@
     <table class="kv">
       <tr><th>凭证类型</th><td>{{ expense.ticket_type | ticket_type_label }}</td></tr>
       <tr><th>提交人</th><td>{{ expense.owner.username }}</td></tr>
-      <tr><th>发票号码</th><td class="mono">{{ expense.receipt_number or '—' }}</td></tr>
+      {% if expense.ticket_type == 'payment' %}
+      <tr><th>支付单号</th><td class="mono">{{ expense.payment_number or '—' }}</td></tr>
+      {% else %}
+      <tr><th>发票号码</th><td class="mono">{{ expense.invoice_number or '—' }}</td></tr>
+      {% endif %}
       <tr><th>商户</th><td>{{ expense.vendor or '—' }}</td></tr>
       <tr><th>日期</th><td>{{ expense.expense_date or '—' }}</td></tr>
       <tr><th>金额</th><td><strong>{{ expense.amount | money }} {{ expense.currency }}</strong></td></tr>

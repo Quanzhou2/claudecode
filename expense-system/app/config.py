@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     # database has no users yet. Set AUTO_SEED=false to disable.
     auto_seed: bool = True
 
+    # Payment-voucher duplicate detection: two screenshots are treated as the
+    # same voucher when their perceptual-hash similarity is >= this (0..1).
+    image_similarity_threshold: float = 0.80
+
     # LLM (OpenAI-compatible)
     llm_api_key: str = ""
     llm_base_url: str = "https://api.openai.com/v1"

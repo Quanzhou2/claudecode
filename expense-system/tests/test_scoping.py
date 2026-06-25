@@ -11,7 +11,7 @@ def test_user_cannot_view_others_record(db):
     a = create_user(db, "alice", "secret1")
     b = create_user(db, "bob", "secret1")
     admin = create_user(db, "root", "secret1", role=Role.admin)
-    e = svc.create_expense(db, a, receipt_number="R1", amount=50)
+    e = svc.create_einvoice(db, a, invoice_number="R1", amount=50)
 
     # Owner and admin can view; the other user cannot.
     assert svc.get_for_user(db, a, e.id).id == e.id
@@ -24,8 +24,8 @@ def test_list_is_scoped(db):
     a = create_user(db, "alice", "secret1")
     b = create_user(db, "bob", "secret1")
     admin = create_user(db, "root", "secret1", role=Role.admin)
-    svc.create_expense(db, a, receipt_number="R1", amount=10)
-    svc.create_expense(db, b, receipt_number="R2", amount=20)
+    svc.create_einvoice(db, a, invoice_number="R1", amount=10)
+    svc.create_einvoice(db, b, invoice_number="R2", amount=20)
 
     _, total_a = svc.list_expenses(db, a)
     _, total_b = svc.list_expenses(db, b)
@@ -38,7 +38,7 @@ def test_list_is_scoped(db):
 def test_owner_cannot_edit_after_review(db):
     a = create_user(db, "alice", "secret1")
     admin = create_user(db, "root", "secret1", role=Role.admin)
-    e = svc.create_expense(db, a, receipt_number="R1", amount=10)
+    e = svc.create_einvoice(db, a, invoice_number="R1", amount=10)
     from app.models import ExpenseStatus
 
     svc.review_expense(db, admin, e, ExpenseStatus.approved, "ok")
@@ -49,7 +49,7 @@ def test_owner_cannot_edit_after_review(db):
 def test_cross_user_http_access_returns_403(client):
     # client fixture has reset the DB; reuse it as user "owner".
     client.post("/register", data={"username": "owner", "password": "secret1"})
-    r = client.post("/expenses", data={"receipt_number": "Z9", "amount": "12", "currency": "CNY"})
+    r = client.post("/expenses", data={"number": "Z9", "amount": "12", "currency": "CNY"})
     expense_url = str(r.url)
     assert "/expenses/" in expense_url
 

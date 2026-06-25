@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import csv
-import hashlib
 import io
 import uuid
 from datetime import date
@@ -14,8 +13,15 @@ from sqlalchemy.orm import Session
 from ..config import get_settings
 from ..database import get_db
 from ..deps import require_admin, require_user
+from ..imaging import perceptual_hash
 from ..llm.extraction import extract_receipt, extract_receipt_from_text
-from ..models import STATUS_LABELS, TICKET_TYPE_LABELS, ExpenseStatus, User
+from ..models import (
+    STATUS_LABELS,
+    TICKET_TYPE_LABELS,
+    EInvoice,
+    ExpenseStatus,
+    User,
+)
 from ..schemas import ReceiptExtraction
 from ..services import audit
 from ..services import expenses as svc
@@ -136,12 +142,13 @@ def export_csv(
     buf = io.StringIO()
     buf.write("﻿")  # UTF-8 BOM so Excel reads Chinese correctly
     writer = csv.writer(buf)
-    writer.writerow(["编号", "类型", "提交人", "发票号码", "商户", "日期", "金额",
-                     "币种", "分类", "支付方式", "税额", "状态", "描述"])
+    writer.writerow(["编号", "类型", "提交人", "发票号码", "支付单号", "商户", "日期",
+                     "金额", "币种", "分类", "支付方式", "税额", "状态", "描述"])
     for e in items:
         writer.writerow([
             e.id, TICKET_TYPE_LABELS.get(e.ticket_type, e.ticket_type),
-            e.owner.username if e.owner else "", e.receipt_number or "",
+            e.owner.username if e.owner else "",
+            getattr(e, "invoice_number", "") or "", getattr(e, "payment_number", "") or "",
             e.vendor or "", e.expense_date or "", e.amount, e.currency,
             e.category or "", e.payment_method or "", e.tax_amount or "",
             STATUS_LABELS.get(e.status.value, e.status.value), e.description or "",
@@ -190,17 +197,25 @@ async def extract(
     ext = _ALLOWED_IMAGE_TYPES[file.content_type]
     filename = f"{uuid.uuid4().hex}{ext}"
     (settings.upload_path / filename).write_bytes(content)
-    image_hash = hashlib.sha256(content).hexdigest()
 
     extraction = extract_receipt(content, file.content_type)
-    # Pre-warn on either a duplicate invoice number or a duplicate image.
-    duplicate = (svc.find_by_receipt_number(db, extraction.receipt_number)
-                 or svc.find_by_image_hash(db, image_hash))
+    duplicate = None
+    match_score = None
+    if ticket_type == "payment":
+        # Compare the picture against all stored payment vouchers by similarity.
+        match = svc.best_payment_match(db, perceptual_hash(content))
+        if match:
+            match_score = match[1]
+            if match[1] >= settings.image_similarity_threshold:
+                duplicate = match[0]
+    else:
+        duplicate = svc.find_by_invoice_number(db, extraction.receipt_number)
 
     return render(
         request, "expense_review.html", user=user,
         data=extraction, image_filename=filename, raw=extraction.model_dump_json(),
-        duplicate=duplicate, categories=svc.CATEGORIES, ticket_type=ticket_type,
+        duplicate=duplicate, match_score=match_score,
+        categories=svc.CATEGORIES, ticket_type=ticket_type,
     )
 
 
@@ -215,7 +230,7 @@ def extract_text(
         return render(request, "expense_new.html", user=user,
                       error="请先粘贴要识别的文字。")
     extraction = extract_receipt_from_text(text)
-    duplicate = svc.find_by_receipt_number(db, extraction.receipt_number)
+    duplicate = svc.find_by_invoice_number(db, extraction.receipt_number)
     return render(
         request, "expense_review.html", user=user,
         data=extraction, image_filename=None, raw=extraction.model_dump_json(),
@@ -229,7 +244,7 @@ def create(
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
     ticket_type: str = Form("einvoice"),
-    receipt_number: str = Form(""),
+    number: str = Form(""),
     vendor: str = Form(""),
     expense_date: str = Form(""),
     amount: str = Form(""),
@@ -242,45 +257,50 @@ def create(
     raw: str = Form(""),
 ):
     image_name = _safe_upload_name(image_path) if image_path else None
-    # Hash the stored image server-side (don't trust a client-supplied hash).
-    image_hash = None
-    if image_name:
-        img = settings.upload_path / image_name
-        if img.exists():
-            image_hash = hashlib.sha256(img.read_bytes()).hexdigest()
+    common = dict(
+        vendor=vendor,
+        expense_date=_parse_date(expense_date),
+        amount=_parse_float(amount) or 0,
+        currency=currency or settings.default_currency,
+        category=category,
+        payment_method=payment_method,
+        tax_amount=_parse_float(tax_amount),
+        description=description,
+        image_path=image_name,
+    )
     try:
-        expense = svc.create_expense(
-            db, user,
-            raw=raw or None,
-            ticket_type=ticket_type,
-            receipt_number=receipt_number,
-            vendor=vendor,
-            expense_date=_parse_date(expense_date),
-            amount=_parse_float(amount) or 0,
-            currency=currency or settings.default_currency,
-            category=category,
-            payment_method=payment_method,
-            tax_amount=_parse_float(tax_amount),
-            description=description,
-            image_path=image_name,
-            image_hash=image_hash,
-        )
+        if ticket_type == "payment":
+            # Hash the stored image server-side (don't trust a client value).
+            phash = None
+            if image_name:
+                img = settings.upload_path / image_name
+                if img.exists():
+                    phash = perceptual_hash(img.read_bytes())
+            expense = svc.create_payment(
+                db, user, image_phash=phash, payment_number=number,
+                raw=raw or None, **common,
+            )
+        else:
+            expense = svc.create_einvoice(
+                db, user, invoice_number=number, raw=raw or None, **common,
+            )
     except svc.ExpenseError as exc:
-        # Covers duplicate (receipt/image) and missing-dedup-key errors.
+        # Covers duplicates (invoice/image) and missing-dedup-key errors.
         return render(
             request, "expense_review.html", user=user,
             error=str(exc), duplicate=getattr(exc, "existing", None),
+            match_score=getattr(exc, "similarity", None),
             categories=svc.CATEGORIES, image_filename=image_name, raw=raw,
             ticket_type=ticket_type,
             data={
-                "receipt_number": receipt_number, "vendor": vendor,
+                "receipt_number": number, "vendor": vendor,
                 "expense_date": expense_date, "amount": amount, "currency": currency,
                 "category": category, "payment_method": payment_method,
                 "tax_amount": tax_amount, "description": description,
             },
         )
     audit.log(db, user, "create_expense", "expense", expense.id,
-              f"amount={expense.amount} {expense.currency}")
+              f"{ticket_type} amount={expense.amount} {expense.currency}")
     return RedirectResponse(f"/expenses/{expense.id}", status_code=303)
 
 
@@ -315,27 +335,30 @@ def edit_form(
 def edit_submit(
     request: Request, expense_id: int,
     user: User = Depends(require_user), db: Session = Depends(get_db),
-    receipt_number: str = Form(""), vendor: str = Form(""),
+    number: str = Form(""), vendor: str = Form(""),
     expense_date: str = Form(""), amount: str = Form(""),
     currency: str = Form(""), category: str = Form(""),
     payment_method: str = Form(""),
     tax_amount: str = Form(""), description: str = Form(""),
 ):
     expense = svc.get_for_user(db, user, expense_id)
+    number_field = (
+        {"invoice_number": number} if isinstance(expense, EInvoice)
+        else {"payment_number": number}
+    )
     try:
         svc.update_expense(
-            db, user, expense,
-            receipt_number=receipt_number, vendor=vendor,
+            db, user, expense, **number_field, vendor=vendor,
             expense_date=_parse_date(expense_date), amount=_parse_float(amount),
             currency=currency, category=category, payment_method=payment_method,
             tax_amount=_parse_float(tax_amount), description=description,
         )
-    except svc.DuplicateReceiptError as exc:
-        return render(request, "expense_edit.html", user=user, expense=expense,
-                      categories=svc.CATEGORIES, error=str(exc))
     except svc.PermissionDenied as exc:
         return render(request, "error.html", user=user,
                       title="拒绝访问", message=str(exc))
+    except svc.ExpenseError as exc:  # duplicate invoice / missing number
+        return render(request, "expense_edit.html", user=user, expense=expense,
+                      categories=svc.CATEGORIES, error=str(exc))
     audit.log(db, user, "update_expense", "expense", expense.id)
     return RedirectResponse(f"/expenses/{expense.id}", status_code=303)
 

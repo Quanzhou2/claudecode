@@ -3,7 +3,7 @@
   <thead><tr>
     <th>#</th>
     {% if current_user.is_admin %}<th>提交人</th>{% endif %}
-    <th>日期</th><th>商户</th><th>发票号码</th><th>分类</th>
+    <th>日期</th><th>商户</th><th>单号</th><th>分类</th>
     <th class="num">金额</th><th>状态</th>
   </tr></thead>
   <tbody>
@@ -13,7 +13,7 @@
       {% if current_user.is_admin %}<td>{{ e.owner.username if e.owner else '—' }}</td>{% endif %}
       <td>{{ e.expense_date or '—' }}</td>
       <td>{{ e.vendor or '—' }}</td>
-      <td class="mono">{{ e.receipt_number or '—' }}</td>
+      <td class="mono">{{ (e.invoice_number or e.payment_number) or '—' }}</td>
       <td>{{ e.category or '—' }}</td>
       <td class="num">{{ e.amount | money }} {{ e.currency }}</td>
       <td><span class="badge {{ e.status | status_class }}">{{ e.status | status_label }}</span></td>

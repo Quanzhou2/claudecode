@@ -9,9 +9,15 @@
 </div>
 <div class="card">
   <form method="post" action="/expenses/{{ expense.id }}/edit">
-    <label>发票号码
-      <input name="receipt_number" value="{{ expense.receipt_number or '' }}">
+    {% if expense.ticket_type == 'payment' %}
+    <label>支付单号 / 交易号
+      <input name="number" value="{{ expense.payment_number or '' }}">
     </label>
+    {% else %}
+    <label>发票号码
+      <input name="number" value="{{ expense.invoice_number or '' }}">
+    </label>
+    {% endif %}
     <div class="form-row">
       <label>日期
         <input name="expense_date" type="date" value="{{ expense.expense_date or '' }}">

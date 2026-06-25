@@ -7,6 +7,9 @@ python-multipart==0.0.20
 # Database
 SQLAlchemy==2.0.36
 
+# Image processing (perceptual hashing for payment-voucher similarity)
+Pillow==12.2.0
+
 # Config & validation
 pydantic==2.10.5
 pydantic-settings==2.7.1
