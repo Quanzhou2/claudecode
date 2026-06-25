@@ -18,7 +18,7 @@ analysis falls back to built-in aggregations.
 
 | Area | What it does |
 |------|--------------|
-| 🔐 **Accounts & roles** | Register / login with signed-cookie sessions and bcrypt-hashed passwords. Two roles: **user** (create & view own records) and **admin** (view/edit *all* records, review, manage users). |
+| 🔐 **Accounts & roles** | Register / login with signed-cookie sessions and bcrypt-hashed passwords. Two roles: **user** (create & view own records) and **admin** (view/edit *all* records, review, manage users, and **submit on behalf of any user** via a submitter selector). |
 | 📷 **Receipt & payment recognition** | Three input modes on the *New* tab: **upload image(s)** (one, or **many at once** → a batch review where each row is editable and duplicates are flagged), **paste text** (copied order/bill details), or **manual entry**. The LLM extracts vendor, date, amount, currency, category, **payment method**, tax and a unique receipt/transaction number → you review & confirm before saving. Handles paper invoices **and** Chinese mobile-payment / e-commerce screenshots — WeChat Pay, Alipay, Pinduoduo, JD, Taobao/Tmall, WeChat Mini Shop — mapping their varied fields (订单编号/交易单号/商户单号 → receipt no., 实付/实付款/合计 → amount, 支付时间 → date) and normalizing negative bill amounts. |
 | 🚫 **Duplicate detection** | Two strategies by ticket type, stored in separate tables: **e-invoices** dedup on the normalized invoice number (exact, globally unique); **payment vouchers** dedup by **visual similarity** — a perceptual hash (dHash) is compared against every stored voucher and a match ≥ the configurable threshold (default 80%) is blocked, with the **similarity score shown**. Catches re-screenshots / re-compressions that an exact hash would miss, across all users. |
 | 🤖 **AI query & analysis** | Ask questions in plain language ("spend by category this quarter"). The LLM writes a read-only SQL query that runs against an **isolated, permission-scoped sandbox**, then summarizes the result. |
@@ -140,8 +140,10 @@ type keeps its own dedup logic:
   exact byte hash would miss — across all users.
 
 Duplicates are pre-warned at the review step (with the similarity score) and
-hard-blocked on save. The image hash is recomputed server-side on save, so a
-client can't bypass the check. An old single-table database is migrated into the
+hard-blocked on save, **showing which existing record they conflict with** —
+linked when the current user may view it, or a privacy-preserving "submitted by
+another user" note otherwise. The image hash is recomputed server-side on save,
+so a client can't bypass the check. An old single-table database is migrated into the
 new tables automatically on first start.
 
 ### AI analysis safety model

@@ -8,6 +8,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse, Response
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..config import get_settings
@@ -24,6 +25,7 @@ from ..models import (
 )
 from ..schemas import ReceiptExtraction
 from ..services import audit
+from ..services import auth as auth_service
 from ..services import expenses as svc
 from ..templating import render
 
@@ -42,6 +44,22 @@ _MAX_BATCH = 30  # max images processed per upload
 def _at(values: list[str], i: int) -> str:
     """Safe positional access for parallel batch-form lists."""
     return values[i] if i < len(values) else ""
+
+
+def _submitter_users(db: Session, user: User) -> list[User]:
+    """Users selectable as the submitter (admins only; otherwise just self)."""
+    if not user.is_admin:
+        return []
+    return list(db.scalars(select(User).order_by(User.username)))
+
+
+def _resolve_owner(db: Session, current_user: User, submitter: str) -> User:
+    """The record owner. Only admins may submit on behalf of another user."""
+    if current_user.is_admin and (submitter or "").strip():
+        target = auth_service.get_by_username(db, submitter.strip())
+        if target:
+            return target
+    return current_user
 
 
 def _parse_date(v: str | None) -> date | None:
@@ -175,12 +193,17 @@ def new_form(request: Request, user: User = Depends(require_user)):
 
 
 @router.get("/expenses/manual")
-def manual_form(request: Request, user: User = Depends(require_user)):
+def manual_form(
+    request: Request,
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
     """Go straight to a blank review form for fully manual entry."""
     return render(
         request, "expense_review.html", user=user,
         data=ReceiptExtraction(), image_filename=None, raw="",
         duplicate=None, categories=svc.CATEGORIES, ticket_type="einvoice",
+        users=_submitter_users(db, user),
     )
 
 
@@ -235,7 +258,7 @@ async def extract(
             data=draft["data"], image_filename=draft["image_filename"],
             raw=draft["raw"], duplicate=draft["duplicate"],
             match_score=draft["match_score"], categories=svc.CATEGORIES,
-            ticket_type=ticket_type,
+            ticket_type=ticket_type, users=_submitter_users(db, user),
         )
 
     drafts, skipped = [], 0
@@ -251,7 +274,7 @@ async def extract(
     return render(
         request, "expense_batch_review.html", user=user,
         drafts=drafts, skipped=skipped, categories=svc.CATEGORIES,
-        ticket_type=ticket_type,
+        ticket_type=ticket_type, users=_submitter_users(db, user),
     )
 
 
@@ -271,6 +294,7 @@ def extract_text(
         request, "expense_review.html", user=user,
         data=extraction, image_filename=None, raw=extraction.model_dump_json(),
         duplicate=duplicate, categories=svc.CATEGORIES, ticket_type="einvoice",
+        users=_submitter_users(db, user),
     )
 
 
@@ -290,8 +314,10 @@ def create(
     tax_amount: str = Form(""),
     description: str = Form(""),
     image_path: str = Form(""),
+    submitter: str = Form(""),
     raw: str = Form(""),
 ):
+    owner = _resolve_owner(db, user, submitter)
     image_name = _safe_upload_name(image_path) if image_path else None
     common = dict(
         vendor=vendor,
@@ -313,12 +339,12 @@ def create(
                 if img.exists():
                     phash = perceptual_hash(img.read_bytes())
             expense = svc.create_payment(
-                db, user, image_phash=phash, payment_number=number,
+                db, owner, image_phash=phash, payment_number=number,
                 raw=raw or None, **common,
             )
         else:
             expense = svc.create_einvoice(
-                db, user, invoice_number=number, raw=raw or None, **common,
+                db, owner, invoice_number=number, raw=raw or None, **common,
             )
     except svc.ExpenseError as exc:
         # Covers duplicates (invoice/image) and missing-dedup-key errors.
@@ -327,7 +353,8 @@ def create(
             error=str(exc), duplicate=getattr(exc, "existing", None),
             match_score=getattr(exc, "similarity", None),
             categories=svc.CATEGORIES, image_filename=image_name, raw=raw,
-            ticket_type=ticket_type,
+            ticket_type=ticket_type, users=_submitter_users(db, user),
+            selected_submitter=submitter,
             data={
                 "receipt_number": number, "vendor": vendor,
                 "expense_date": expense_date, "amount": amount, "currency": currency,
@@ -336,7 +363,7 @@ def create(
             },
         )
     audit.log(db, user, "create_expense", "expense", expense.id,
-              f"{ticket_type} amount={expense.amount} {expense.currency}")
+              f"{ticket_type} owner={owner.username} amount={expense.amount} {expense.currency}")
     return RedirectResponse(f"/expenses/{expense.id}", status_code=303)
 
 
@@ -357,12 +384,15 @@ def batch_create(
     tax_amount: list[str] = Form([]),
     description: list[str] = Form([]),
     action: list[str] = Form([]),
+    submitter: str = Form(""),
     raw: list[str] = Form([]),
 ):
+    owner = _resolve_owner(db, user, submitter)
     saved, skipped = [], []
     for i in range(len(number)):  # one row per submitted number field
+        label = _at(number, i) or _at(vendor, i) or f"第 {i + 1} 项"
         if _at(action, i) == "skip":
-            skipped.append((_at(number, i) or _at(vendor, i) or f"第 {i + 1} 项", "已跳过"))
+            skipped.append((label, "已跳过", None))
             continue
         image_name = _safe_upload_name(_at(image_path, i)) if _at(image_path, i) else None
         common = dict(
@@ -381,19 +411,19 @@ def batch_create(
                     if img.exists():
                         phash = perceptual_hash(img.read_bytes())
                 e = svc.create_payment(
-                    db, user, image_phash=phash, payment_number=_at(number, i),
+                    db, owner, image_phash=phash, payment_number=_at(number, i),
                     raw=_at(raw, i) or None, **common,
                 )
             else:
                 e = svc.create_einvoice(
-                    db, user, invoice_number=_at(number, i),
+                    db, owner, invoice_number=_at(number, i),
                     raw=_at(raw, i) or None, **common,
                 )
             saved.append(e)
             audit.log(db, user, "create_expense", "expense", e.id,
-                      f"{ticket_type} (batch)")
+                      f"{ticket_type} (batch) owner={owner.username}")
         except svc.ExpenseError as exc:
-            skipped.append((_at(number, i) or _at(vendor, i) or f"第 {i + 1} 项", str(exc)))
+            skipped.append((label, str(exc), getattr(exc, "existing", None)))
     return render(
         request, "expense_batch_result.html", user=user,
         saved=saved, skipped=skipped, ticket_type=ticket_type,

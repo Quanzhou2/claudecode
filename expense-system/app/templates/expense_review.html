@@ -17,12 +17,16 @@
 {% endif %}
 
 {% if duplicate %}
+  {% set dup_viewable = current_user.is_admin or duplicate.user_id == current_user.id %}
   <div class="alert alert-error">
     ⚠ <strong>检测到重复凭证</strong>
-    {% if match_score is not none %}（图片相似度 {{ (match_score * 100) | round | int }}%）{% endif %}
-    {% if current_user.is_admin %}
-      （已存在记录 #{{ duplicate.id }}，提交人 {{ duplicate.owner.username }}，
-      状态 {{ duplicate.status | status_label }}）{% endif %}。
+    {% if match_score is not none %}（图片相似度 {{ (match_score * 100) | round | int }}%）{% endif %} —
+    {% if dup_viewable %}
+      与已存在记录 <a href="/expenses/{{ duplicate.id }}">#{{ duplicate.id }}</a>
+      （提交人 {{ duplicate.owner.username }}，{{ duplicate.status | status_label }}）重复。
+    {% else %}
+      与已存在记录 <strong>#{{ duplicate.id }}</strong>（由其他用户提交）重复。
+    {% endif %}
     {% if (ticket_type or 'einvoice') == 'payment' %}支付凭证按<strong>图片相似度</strong>查重{% else %}电子发票按<strong>发票号码</strong>查重{% endif %}，
     为防止重复报销已拦截。
   </div>
@@ -39,6 +43,16 @@
       <input type="hidden" name="image_path" value="{{ image_filename or '' }}">
       <input type="hidden" name="raw" value="{{ raw or '' }}">
       <input type="hidden" name="ticket_type" value="{{ ticket_type or 'einvoice' }}">
+
+      {% if current_user.is_admin and users %}
+      <label>提交人
+        <select name="submitter">
+          {% for u in users %}
+            <option value="{{ u.username }}" {{ 'selected' if (selected_submitter or current_user.username) == u.username }}>{{ u.username }}{% if u.full_name %}（{{ u.full_name }}）{% endif %}</option>
+          {% endfor %}
+        </select>
+      </label>
+      {% endif %}
 
       <label>{{ '发票号码（电子发票必填）' if (ticket_type or 'einvoice') == 'einvoice' else '支付单号 / 交易号（选填）' }}
         <input name="number" value="{{ data.receipt_number or '' }}"

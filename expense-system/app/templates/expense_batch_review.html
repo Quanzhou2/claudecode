@@ -16,6 +16,17 @@
 
 <form method="post" action="/expenses/batch">
   <input type="hidden" name="ticket_type" value="{{ tt }}">
+  {% if current_user.is_admin and users %}
+  <div class="card">
+    <label>提交人（应用于本批全部）
+      <select name="submitter">
+        {% for u in users %}
+          <option value="{{ u.username }}" {{ 'selected' if current_user.username == u.username }}>{{ u.username }}{% if u.full_name %}（{{ u.full_name }}）{% endif %}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+  {% endif %}
   {% for d in drafts %}
   <div class="card batch-row">
     <div class="batch-thumb">
@@ -28,7 +39,9 @@
       <input type="hidden" name="raw" value="{{ d.raw }}">
 
       {% if d.duplicate %}
-        <div class="alert alert-error">⚠ 检测到重复{% if d.match_score is not none %}（图片相似度 {{ (d.match_score * 100) | round | int }}%）{% endif %}，默认跳过。</div>
+        {% set dv = current_user.is_admin or d.duplicate.user_id == current_user.id %}
+        <div class="alert alert-error">⚠ 检测到重复{% if d.match_score is not none %}（图片相似度 {{ (d.match_score * 100) | round | int }}%）{% endif %} —
+          {% if dv %}与 <a href="/expenses/{{ d.duplicate.id }}">记录 #{{ d.duplicate.id }}</a>（{{ d.duplicate.owner.username }}）{% else %}与记录 #{{ d.duplicate.id }}（其他用户）{% endif %}重复，默认跳过。</div>
       {% elif d.match_score %}
         <div class="alert alert-info">最高图片相似度 {{ (d.match_score * 100) | round | int }}%（未达阈值）。</div>
       {% endif %}

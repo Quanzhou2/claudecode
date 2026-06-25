@@ -42,8 +42,14 @@
   <table class="data-table">
     <thead><tr><th>单号 / 项</th><th>原因</th></tr></thead>
     <tbody>
-    {% for label, reason in skipped %}
-      <tr><td class="mono">{{ label }}</td><td class="muted">{{ reason }}</td></tr>
+    {% for label, reason, existing in skipped %}
+      <tr><td class="mono">{{ label }}</td><td class="muted">{{ reason }}
+        {% if existing %}
+          {% if current_user.is_admin or existing.user_id == current_user.id %}
+            （<a href="/expenses/{{ existing.id }}">#{{ existing.id }}</a>）
+          {% else %}（记录 #{{ existing.id }}）{% endif %}
+        {% endif %}
+      </td></tr>
     {% endfor %}
     </tbody>
   </table>
