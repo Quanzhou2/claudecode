@@ -1,7 +1,7 @@
 <div class="table-wrap">
 <table class="data-table">
   <thead><tr>
-    <th>#</th>
+    <th>#</th><th>类型</th>
     {% if current_user.is_admin %}<th>提交人</th>{% endif %}
     <th>日期</th><th>商户</th><th>单号</th><th>分类</th>
     <th class="num">金额</th><th>状态</th>
@@ -10,6 +10,7 @@
   {% for e in items %}
     <tr class="clickable" onclick="location.href='/expenses/{{ e.id }}'">
       <td>{{ e.id }}</td>
+      <td><span class="badge {{ 'badge-admin' if e.ticket_type == 'payment' else 'badge-user' }}">{{ e.ticket_type | ticket_type_label }}</span></td>
       {% if current_user.is_admin %}<td>{{ e.owner.username if e.owner else '—' }}</td>{% endif %}
       <td>{{ e.expense_date or '—' }}</td>
       <td>{{ e.vendor or '—' }}</td>
@@ -19,7 +20,7 @@
       <td><span class="badge {{ e.status | status_class }}">{{ e.status | status_label }}</span></td>
     </tr>
   {% else %}
-    <tr><td colspan="9" class="muted center">暂无记录。</td></tr>
+    <tr><td colspan="10" class="muted center">暂无记录。</td></tr>
   {% endfor %}
   </tbody>
 </table>

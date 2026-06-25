@@ -244,20 +244,22 @@ def _scoped_query(user: User):
     return stmt
 
 
-def list_expenses(
+def _query_records(
     db: Session,
     user: User,
     *,
+    ticket_type: str | None = None,
     status: str | None = None,
     category: str | None = None,
     q: str | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
     owner_id: int | None = None,
-    page: int = 1,
-    page_size: int = 20,
-) -> tuple[list[Expense], int]:
+) -> list[Expense]:
+    """Scoped, filtered, newest-first records (no pagination)."""
     stmt = _scoped_query(user)
+    if ticket_type in ("einvoice", "payment"):
+        stmt = stmt.where(Expense.ticket_type == ticket_type)
     if status:
         stmt = stmt.where(Expense.status == ExpenseStatus(status))
     if category:
@@ -278,11 +280,39 @@ def list_expenses(
                 filter(None, [e.vendor, e.description, record_number(e)])
             ).lower()
         ]
+    return rows
 
+
+def list_expenses(
+    db: Session,
+    user: User,
+    *,
+    ticket_type: str | None = None,
+    status: str | None = None,
+    category: str | None = None,
+    q: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    owner_id: int | None = None,
+    page: int = 1,
+    page_size: int = 20,
+) -> tuple[list[Expense], int]:
+    rows = _query_records(
+        db, user, ticket_type=ticket_type, status=status, category=category,
+        q=q, date_from=date_from, date_to=date_to, owner_id=owner_id,
+    )
     total = len(rows)
     page = max(1, page)
     start = (page - 1) * page_size
     return rows[start : start + page_size], total
+
+
+def count_by_type(db: Session, user: User, **filters) -> dict:
+    """Counts of all / e-invoice / payment records under the given filters."""
+    filters.pop("ticket_type", None)
+    rows = _query_records(db, user, ticket_type=None, **filters)
+    einvoice = sum(1 for e in rows if e.ticket_type == "einvoice")
+    return {"all": len(rows), "einvoice": einvoice, "payment": len(rows) - einvoice}
 
 
 # --------------------------------------------------------------------------- #

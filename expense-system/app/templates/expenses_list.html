@@ -1,16 +1,27 @@
 {% extends "base.html" %}
 {% block title %}报销记录 · {{ app_name }}{% endblock %}
 {% block content %}
+{% set qs = "status=" ~ filters.status ~ "&category=" ~ filters.category ~ "&q=" ~ filters.q ~ "&date_from=" ~ filters.date_from ~ "&date_to=" ~ filters.date_to %}
 <div class="page-head">
   <h1>报销记录</h1>
   <div class="actions">
-    <a class="btn" href="/expenses/export.csv?status={{ filters.status }}&category={{ filters.category }}&q={{ filters.q }}">⬇ 导出 CSV</a>
+    <a class="btn" href="/expenses/export.csv?type={{ filters.type }}&{{ qs }}">⬇ 导出 CSV</a>
     <a class="btn btn-primary" href="/expenses/new">+ 新建报销</a>
   </div>
 </div>
 
+<div class="switch">
+  <a href="/expenses?type=&{{ qs }}" class="{{ 'active' if not filters.type }}">
+    全部 <span class="count">{{ counts.all }}</span></a>
+  <a href="/expenses?type=einvoice&{{ qs }}" class="{{ 'active' if filters.type == 'einvoice' }}">
+    电子发票 <span class="count">{{ counts.einvoice }}</span></a>
+  <a href="/expenses?type=payment&{{ qs }}" class="{{ 'active' if filters.type == 'payment' }}">
+    支付凭证 <span class="count">{{ counts.payment }}</span></a>
+</div>
+
 <form class="filters card" method="get" action="/expenses">
-  <input name="q" placeholder="搜索 商户 / 发票号 / 备注" value="{{ filters.q }}">
+  <input type="hidden" name="type" value="{{ filters.type }}">
+  <input name="q" placeholder="搜索 商户 / 单号 / 备注" value="{{ filters.q }}">
   <select name="status">
     <option value="">全部状态</option>
     {% for s in statuses %}
@@ -26,18 +37,21 @@
   <input name="date_from" type="date" value="{{ filters.date_from }}" title="起始日期">
   <input name="date_to" type="date" value="{{ filters.date_to }}" title="结束日期">
   <button class="btn" type="submit">筛选</button>
-  <a class="btn-link" href="/expenses">重置</a>
+  <a class="btn-link" href="/expenses?type={{ filters.type }}">重置</a>
 </form>
 
 <div class="card">
-  <p class="muted">共 {{ total }} 条记录</p>
+  <p class="muted">
+    共 {{ total }} 条记录
+    {% if filters.type == 'einvoice' %}（电子发票）{% elif filters.type == 'payment' %}（支付凭证）{% endif %}
+  </p>
   {% include "_expense_table.html" %}
 
   {% if pages > 1 %}
   <div class="pagination">
     {% for p in range(1, pages + 1) %}
       <a class="page {{ 'active' if p == page }}"
-         href="/expenses?page={{ p }}&status={{ filters.status }}&category={{ filters.category }}&q={{ filters.q }}&date_from={{ filters.date_from }}&date_to={{ filters.date_to }}">{{ p }}</a>
+         href="/expenses?page={{ p }}&type={{ filters.type }}&{{ qs }}">{{ p }}</a>
     {% endfor %}
   </div>
   {% endif %}

@@ -105,25 +105,24 @@ def list_view(
     q: str = Query(""),
     date_from: str = Query(""),
     date_to: str = Query(""),
+    ticket_type: str = Query("", alias="type"),
     page: int = Query(1),
 ):
-    items, total = svc.list_expenses(
-        db, user,
-        status=status or None,
-        category=category or None,
-        q=q or None,
-        date_from=_parse_date(date_from),
-        date_to=_parse_date(date_to),
-        page=page,
-        page_size=20,
+    common = dict(
+        status=status or None, category=category or None, q=q or None,
+        date_from=_parse_date(date_from), date_to=_parse_date(date_to),
     )
+    items, total = svc.list_expenses(
+        db, user, ticket_type=ticket_type or None, page=page, page_size=20, **common
+    )
+    counts = svc.count_by_type(db, user, **common)
     pages = max(1, (total + 19) // 20)
     return render(
         request, "expenses_list.html", user=user,
-        items=items, total=total, page=page, pages=pages,
+        items=items, total=total, page=page, pages=pages, counts=counts,
         categories=svc.CATEGORIES, statuses=[s.value for s in ExpenseStatus],
         filters={"status": status, "category": category, "q": q,
-                 "date_from": date_from, "date_to": date_to},
+                 "date_from": date_from, "date_to": date_to, "type": ticket_type},
     )
 
 
@@ -134,10 +133,11 @@ def export_csv(
     status: str = Query(""),
     category: str = Query(""),
     q: str = Query(""),
+    ticket_type: str = Query("", alias="type"),
 ):
     items, _ = svc.list_expenses(
-        db, user, status=status or None, category=category or None,
-        q=q or None, page=1, page_size=100000,
+        db, user, ticket_type=ticket_type or None, status=status or None,
+        category=category or None, q=q or None, page=1, page_size=100000,
     )
     buf = io.StringIO()
     buf.write("﻿")  # UTF-8 BOM so Excel reads Chinese correctly
