@@ -25,6 +25,7 @@ from .client import get_client
 SCHEMA_COLUMNS = [
     ("id", "INTEGER"),
     ("owner", "TEXT"),  # username of the submitter
+    ("ticket_type", "TEXT"),  # einvoice / payment
     ("receipt_number", "TEXT"),
     ("vendor", "TEXT"),
     ("expense_date", "TEXT"),  # ISO YYYY-MM-DD

@@ -8,7 +8,14 @@ from fastapi import Request
 from fastapi.templating import Jinja2Templates
 
 from .config import get_settings
-from .models import ACTION_LABELS, ENTITY_LABELS, ROLE_LABELS, STATUS_LABELS, User
+from .models import (
+    ACTION_LABELS,
+    ENTITY_LABELS,
+    ROLE_LABELS,
+    STATUS_LABELS,
+    TICKET_TYPE_LABELS,
+    User,
+)
 
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(_TEMPLATE_DIR))
@@ -53,12 +60,17 @@ def _entity_label(entity: Any) -> str:
     return ENTITY_LABELS.get(str(entity), str(entity))
 
 
+def _ticket_type_label(value: Any) -> str:
+    return TICKET_TYPE_LABELS.get(str(value), str(value))
+
+
 templates.env.filters["money"] = _money
 templates.env.filters["status_class"] = _status_class
 templates.env.filters["status_label"] = _status_label
 templates.env.filters["role_label"] = _role_label
 templates.env.filters["action_label"] = _action_label
 templates.env.filters["entity_label"] = _entity_label
+templates.env.filters["ticket_type_label"] = _ticket_type_label
 
 
 def render(request: Request, name: str, user: User | None = None, **context: Any):

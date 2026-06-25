@@ -8,7 +8,7 @@ from typing import Any
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from ..models import Expense, ExpenseStatus, User
+from ..models import TICKET_TYPES, Expense, ExpenseStatus, User
 
 CATEGORIES = [
     "餐饮", "差旅", "交通", "住宿", "办公",
@@ -20,13 +20,25 @@ class ExpenseError(Exception):
     """User-facing business-rule error."""
 
 
-class DuplicateReceiptError(ExpenseError):
+class DuplicateError(ExpenseError):
+    """Base for duplicate-detection errors; carries the existing record."""
+
+    def __init__(self, message: str, existing: Expense):
+        self.existing = existing
+        super().__init__(message)
+
+
+class DuplicateReceiptError(DuplicateError):
     def __init__(self, receipt_number: str, existing: Expense):
         self.receipt_number = receipt_number
-        self.existing = existing
         super().__init__(
-            f"发票号码 '{receipt_number}' 已被提交过，不能重复报销。"
+            f"发票号码 '{receipt_number}' 已被提交过，不能重复报销。", existing
         )
+
+
+class DuplicateImageError(DuplicateError):
+    def __init__(self, existing: Expense):
+        super().__init__("该支付凭证图片已存在，不能重复报销。", existing)
 
 
 class PermissionDenied(ExpenseError):
@@ -50,19 +62,44 @@ def find_by_receipt_number(db: Session, receipt_number: str | None) -> Expense |
     return db.scalar(select(Expense).where(Expense.receipt_number == norm))
 
 
+def find_by_image_hash(db: Session, image_hash: str | None) -> Expense | None:
+    if not image_hash:
+        return None
+    return db.scalar(select(Expense).where(Expense.image_hash == image_hash))
+
+
+def _normalize_ticket_type(value: str | None) -> str:
+    value = (value or "einvoice").strip()
+    return value if value in TICKET_TYPES else "einvoice"
+
+
 # --------------------------------------------------------------------------- #
 # Create / update
 # --------------------------------------------------------------------------- #
 def create_expense(db: Session, owner: User, *, raw: str | None = None, **fields: Any) -> Expense:
+    ticket_type = _normalize_ticket_type(fields.get("ticket_type"))
     receipt_number = normalize_receipt_number(fields.get("receipt_number"))
+    image_hash = (fields.get("image_hash") or "").strip() or None
 
+    # Each type must carry the key it is deduplicated by.
+    if ticket_type == "einvoice" and not receipt_number:
+        raise ExpenseError("电子发票需要填写发票号码（用于查重）。")
+    if ticket_type == "payment" and not image_hash:
+        raise ExpenseError("支付凭证需要上传图片（用于查重）。")
+
+    # Duplicate detection: by invoice/transaction number AND by image content.
     if receipt_number:
         existing = find_by_receipt_number(db, receipt_number)
         if existing:
             raise DuplicateReceiptError(receipt_number, existing)
+    if image_hash:
+        existing_img = find_by_image_hash(db, image_hash)
+        if existing_img:
+            raise DuplicateImageError(existing_img)
 
     expense = Expense(
         user_id=owner.id,
+        ticket_type=ticket_type,
         receipt_number=receipt_number,
         vendor=(fields.get("vendor") or "").strip() or None,
         expense_date=fields.get("expense_date"),
@@ -73,6 +110,7 @@ def create_expense(db: Session, owner: User, *, raw: str | None = None, **fields
         tax_amount=fields.get("tax_amount"),
         description=(fields.get("description") or "").strip() or None,
         image_path=fields.get("image_path"),
+        image_hash=image_hash,
         extracted_raw=raw,
         status=ExpenseStatus.pending,
     )
@@ -215,6 +253,7 @@ def rows_for_analysis(db: Session, user: User) -> list[dict]:
             {
                 "id": e.id,
                 "owner": e.owner.username if e.owner else None,
+                "ticket_type": e.ticket_type,
                 "receipt_number": e.receipt_number,
                 "vendor": e.vendor,
                 "expense_date": e.expense_date.isoformat() if e.expense_date else None,

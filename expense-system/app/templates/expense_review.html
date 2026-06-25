@@ -1,7 +1,12 @@
 {% extends "base.html" %}
 {% block title %}核对发票 · {{ app_name }}{% endblock %}
 {% block content %}
-<div class="page-head"><h1>核对并保存</h1></div>
+<div class="page-head">
+  <h1>核对并保存</h1>
+  <span class="badge {{ 'badge-admin' if ticket_type == 'payment' else 'badge-user' }}">
+    {{ (ticket_type or 'einvoice') | ticket_type_label }}
+  </span>
+</div>
 
 {% if data.llm_used %}
   <div class="alert alert-ok">
@@ -13,12 +18,11 @@
 
 {% if duplicate %}
   <div class="alert alert-error">
-    ⚠ <strong>发票号码重复。</strong>
-    该发票号码已存在
+    ⚠ <strong>检测到重复凭证</strong>
     {% if current_user.is_admin %}
-      （记录 #{{ duplicate.id }}，提交人 {{ duplicate.owner.username }}，
+      （已存在记录 #{{ duplicate.id }}，提交人 {{ duplicate.owner.username }}，
       状态 {{ duplicate.status | status_label }}）{% endif %}。
-    请修改或清空号码后再继续——为防止重复报销，系统会拦截重复发票。
+    为防止重复报销，系统会拦截相同的<strong>发票号码</strong>或<strong>凭证图片</strong>。
   </div>
 {% endif %}
 
@@ -27,8 +31,9 @@
     <form method="post" action="/expenses">
       <input type="hidden" name="image_path" value="{{ image_filename or '' }}">
       <input type="hidden" name="raw" value="{{ raw or '' }}">
+      <input type="hidden" name="ticket_type" value="{{ ticket_type or 'einvoice' }}">
 
-      <label>发票号码
+      <label>{{ '发票号码（电子发票必填）' if (ticket_type or 'einvoice') == 'einvoice' else '发票号码 / 交易号（选填）' }}
         <input name="receipt_number" value="{{ data.receipt_number or '' }}"
                class="{{ 'input-error' if duplicate }}">
       </label>

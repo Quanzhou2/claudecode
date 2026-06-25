@@ -40,6 +40,10 @@ STATUS_LABELS = {
     "rejected": "已驳回",
     "paid": "已支付",
 }
+# Ticket / voucher types: e-invoice (dedup by invoice number) vs payment
+# screenshot (stored as a picture, dedup by image content hash).
+TICKET_TYPES = ("einvoice", "payment")
+TICKET_TYPE_LABELS = {"einvoice": "电子发票", "payment": "支付凭证"}
 ROLE_LABELS = {"user": "用户", "admin": "管理员"}
 ACTION_LABELS = {
     "login": "登录",
@@ -81,13 +85,18 @@ class Expense(Base):
     __tablename__ = "expenses"
     # Receipt numbers are globally unique to prevent the same physical
     # receipt being reimbursed twice (even across different users).
+    # The image hash blocks the same payment screenshot being submitted twice.
     __table_args__ = (
         UniqueConstraint("receipt_number", name="uq_expenses_receipt_number"),
+        UniqueConstraint("image_hash", name="uq_expenses_image_hash"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
 
+    # "einvoice" (extract fields, dedup by receipt_number) or
+    # "payment" (store the picture, dedup by image_hash).
+    ticket_type: Mapped[str] = mapped_column(String(16), default="einvoice", index=True)
     receipt_number: Mapped[str | None] = mapped_column(String(128), index=True)
     vendor: Mapped[str | None] = mapped_column(String(255))
     expense_date: Mapped[date | None] = mapped_column(Date, index=True)
@@ -100,6 +109,8 @@ class Expense(Base):
     payment_method: Mapped[str | None] = mapped_column(String(64))
     description: Mapped[str | None] = mapped_column(Text)
     image_path: Mapped[str | None] = mapped_column(String(512))
+    # SHA-256 of the uploaded image bytes; used to detect duplicate vouchers.
+    image_hash: Mapped[str | None] = mapped_column(String(64), index=True)
 
     status: Mapped[ExpenseStatus] = mapped_column(
         Enum(ExpenseStatus), default=ExpenseStatus.pending, index=True

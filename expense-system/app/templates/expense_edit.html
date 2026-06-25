@@ -1,7 +1,12 @@
 {% extends "base.html" %}
 {% block title %}编辑 #{{ expense.id }} · {{ app_name }}{% endblock %}
 {% block content %}
-<div class="page-head"><h1>编辑记录 #{{ expense.id }}</h1></div>
+<div class="page-head">
+  <h1>编辑记录 #{{ expense.id }}</h1>
+  <span class="badge {{ 'badge-admin' if expense.ticket_type == 'payment' else 'badge-user' }}">
+    {{ expense.ticket_type | ticket_type_label }}
+  </span>
+</div>
 <div class="card">
   <form method="post" action="/expenses/{{ expense.id }}/edit">
     <label>发票号码

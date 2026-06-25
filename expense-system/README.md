@@ -20,7 +20,7 @@ analysis falls back to built-in aggregations.
 |------|--------------|
 | 🔐 **Accounts & roles** | Register / login with signed-cookie sessions and bcrypt-hashed passwords. Two roles: **user** (create & view own records) and **admin** (view/edit *all* records, review, manage users). |
 | 📷 **Receipt & payment recognition** | Three input modes on the *New* tab: **upload an image**, **paste text** (copied order/bill details), or **manual entry**. The LLM extracts vendor, date, amount, currency, category, **payment method**, tax and a unique receipt/transaction number → you review & confirm before saving. Handles paper invoices **and** Chinese mobile-payment / e-commerce screenshots — WeChat Pay, Alipay, Pinduoduo, JD, Taobao/Tmall, WeChat Mini Shop — mapping their varied fields (订单编号/交易单号/商户单号 → receipt no., 实付/实付款/合计 → amount, 支付时间 → date) and normalizing negative bill amounts. |
-| 🚫 **Duplicate detection** | Receipt numbers are normalized and enforced **globally unique** (DB constraint + friendly pre-check) so the same receipt can't be reimbursed twice — even by different users. |
+| 🚫 **Duplicate detection** | Two strategies by ticket type: **e-invoices** dedup on the normalized invoice number; **payment vouchers** dedup on the image's SHA-256 hash. Both are globally unique (DB constraint + friendly pre-check) so the same receipt or screenshot can't be reimbursed twice — even by different users. |
 | 🤖 **AI query & analysis** | Ask questions in plain language ("spend by category this quarter"). The LLM writes a read-only SQL query that runs against an **isolated, permission-scoped sandbox**, then summarizes the result. |
 | ✅ **Approval workflow** | Records flow through `pending → approved / rejected / paid`. Admins review with an optional note; owners can edit only while `pending`. |
 | 📊 **Dashboard** | Per-role summary cards plus spend-by-month and spend-by-category charts. |
@@ -122,11 +122,20 @@ Receipt OCR requires the configured **vision** model to accept image input.
 
 ## How it works
 
-### Duplicate detection
-Receipt numbers are normalized (whitespace stripped, upper-cased) and stored
-with a `UNIQUE` constraint. On create/edit the service checks for an existing
-match and raises a friendly error; the DB constraint is the final safety net
-against races. Records *without* a number are allowed (multiple are fine).
+### Ticket types & duplicate detection
+The *New* tab distinguishes two voucher types:
+
+- **电子发票 (e-invoice)** — fields are extracted and the **invoice number** is
+  the dedup key (required). Numbers are normalized (whitespace stripped,
+  upper-cased) and globally unique.
+- **支付凭证 (payment voucher)** — the **image is stored** and its **SHA-256
+  content hash** is the dedup key (the image is required), so the same payment
+  screenshot can't be submitted twice — even by a different user.
+
+Both keys are checked on every create (and an extracted transaction number on a
+payment voucher is deduped too), backed by `UNIQUE` constraints on
+`receipt_number` and `image_hash` as the final safety net against races.
+Duplicates are pre-warned at the review step and hard-blocked on save.
 
 ### AI analysis safety model
 Natural-language questions never touch the live database directly. Instead:

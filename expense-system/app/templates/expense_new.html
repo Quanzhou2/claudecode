@@ -15,6 +15,12 @@
   <div class="card">
     <h2>📷 上传图片</h2>
     <form method="post" action="/expenses/extract" enctype="multipart/form-data">
+      <div class="seg" role="radiogroup">
+        <label><input type="radio" name="ticket_type" value="einvoice" checked>
+          <span>电子发票</span><small>提取字段，按发票号码查重</small></label>
+        <label><input type="radio" name="ticket_type" value="payment">
+          <span>支付凭证</span><small>保存图片，按图片查重</small></label>
+      </div>
       <label class="dropzone" id="dropzone">
         <input type="file" name="file" id="fileInput" accept="image/*" required hidden>
         <div id="dropText">点击选择凭证图片（JPG / PNG / WEBP / GIF）</div>

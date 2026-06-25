@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 import uuid
 from datetime import date
@@ -14,7 +15,7 @@ from ..config import get_settings
 from ..database import get_db
 from ..deps import require_admin, require_user
 from ..llm.extraction import extract_receipt, extract_receipt_from_text
-from ..models import STATUS_LABELS, ExpenseStatus, User
+from ..models import STATUS_LABELS, TICKET_TYPE_LABELS, ExpenseStatus, User
 from ..schemas import ReceiptExtraction
 from ..services import audit
 from ..services import expenses as svc
@@ -135,11 +136,12 @@ def export_csv(
     buf = io.StringIO()
     buf.write("﻿")  # UTF-8 BOM so Excel reads Chinese correctly
     writer = csv.writer(buf)
-    writer.writerow(["编号", "提交人", "发票号码", "商户", "日期", "金额",
+    writer.writerow(["编号", "类型", "提交人", "发票号码", "商户", "日期", "金额",
                      "币种", "分类", "支付方式", "税额", "状态", "描述"])
     for e in items:
         writer.writerow([
-            e.id, e.owner.username if e.owner else "", e.receipt_number or "",
+            e.id, TICKET_TYPE_LABELS.get(e.ticket_type, e.ticket_type),
+            e.owner.username if e.owner else "", e.receipt_number or "",
             e.vendor or "", e.expense_date or "", e.amount, e.currency,
             e.category or "", e.payment_method or "", e.tax_amount or "",
             STATUS_LABELS.get(e.status.value, e.status.value), e.description or "",
@@ -165,7 +167,7 @@ def manual_form(request: Request, user: User = Depends(require_user)):
     return render(
         request, "expense_review.html", user=user,
         data=ReceiptExtraction(), image_filename=None, raw="",
-        duplicate=None, categories=svc.CATEGORIES,
+        duplicate=None, categories=svc.CATEGORIES, ticket_type="einvoice",
     )
 
 
@@ -173,6 +175,7 @@ def manual_form(request: Request, user: User = Depends(require_user)):
 async def extract(
     request: Request,
     file: UploadFile = File(...),
+    ticket_type: str = Form("einvoice"),
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
 ):
@@ -187,14 +190,17 @@ async def extract(
     ext = _ALLOWED_IMAGE_TYPES[file.content_type]
     filename = f"{uuid.uuid4().hex}{ext}"
     (settings.upload_path / filename).write_bytes(content)
+    image_hash = hashlib.sha256(content).hexdigest()
 
     extraction = extract_receipt(content, file.content_type)
-    duplicate = svc.find_by_receipt_number(db, extraction.receipt_number)
+    # Pre-warn on either a duplicate invoice number or a duplicate image.
+    duplicate = (svc.find_by_receipt_number(db, extraction.receipt_number)
+                 or svc.find_by_image_hash(db, image_hash))
 
     return render(
         request, "expense_review.html", user=user,
         data=extraction, image_filename=filename, raw=extraction.model_dump_json(),
-        duplicate=duplicate, categories=svc.CATEGORIES,
+        duplicate=duplicate, categories=svc.CATEGORIES, ticket_type=ticket_type,
     )
 
 
@@ -213,7 +219,7 @@ def extract_text(
     return render(
         request, "expense_review.html", user=user,
         data=extraction, image_filename=None, raw=extraction.model_dump_json(),
-        duplicate=duplicate, categories=svc.CATEGORIES,
+        duplicate=duplicate, categories=svc.CATEGORIES, ticket_type="einvoice",
     )
 
 
@@ -222,6 +228,7 @@ def create(
     request: Request,
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
+    ticket_type: str = Form("einvoice"),
     receipt_number: str = Form(""),
     vendor: str = Form(""),
     expense_date: str = Form(""),
@@ -235,10 +242,17 @@ def create(
     raw: str = Form(""),
 ):
     image_name = _safe_upload_name(image_path) if image_path else None
+    # Hash the stored image server-side (don't trust a client-supplied hash).
+    image_hash = None
+    if image_name:
+        img = settings.upload_path / image_name
+        if img.exists():
+            image_hash = hashlib.sha256(img.read_bytes()).hexdigest()
     try:
         expense = svc.create_expense(
             db, user,
             raw=raw or None,
+            ticket_type=ticket_type,
             receipt_number=receipt_number,
             vendor=vendor,
             expense_date=_parse_date(expense_date),
@@ -249,12 +263,15 @@ def create(
             tax_amount=_parse_float(tax_amount),
             description=description,
             image_path=image_name,
+            image_hash=image_hash,
         )
-    except svc.DuplicateReceiptError as exc:
+    except svc.ExpenseError as exc:
+        # Covers duplicate (receipt/image) and missing-dedup-key errors.
         return render(
             request, "expense_review.html", user=user,
-            error=str(exc), duplicate=exc.existing, categories=svc.CATEGORIES,
-            image_filename=image_name, raw=raw,
+            error=str(exc), duplicate=getattr(exc, "existing", None),
+            categories=svc.CATEGORIES, image_filename=image_name, raw=raw,
+            ticket_type=ticket_type,
             data={
                 "receipt_number": receipt_number, "vendor": vendor,
                 "expense_date": expense_date, "amount": amount, "currency": currency,
