@@ -1,0 +1,270 @@
+# 🧾 Expense Reimbursement System
+
+A self-hosted expense reimbursement web app with **LLM-powered receipt
+recognition**, **duplicate-receipt blocking**, **role-based access** (user vs.
+administrator), and an **intelligent natural-language query & analysis**
+feature. Built with FastAPI + SQLite and a server-rendered UI — no build step,
+runs from a single `uvicorn` process.
+
+The LLM layer speaks the **OpenAI-compatible Chat Completions API**, so you can
+point it at OpenAI, DeepSeek, Qwen/DashScope, Moonshot, Zhipu, a local Ollama /
+vLLM server, or anything else that exposes that API — purely via configuration.
+With no API key it runs in **offline mode**: receipts are entered manually and
+analysis falls back to built-in aggregations.
+
+---
+
+## Features
+
+| Area | What it does |
+|------|--------------|
+| 🔐 **Accounts & roles** | Register / login with signed-cookie sessions and bcrypt-hashed passwords. Two roles: **user** (create & view own records) and **admin** (view/edit *all* records, review, manage users, and **submit on behalf of any user** via a submitter selector). |
+| 📷 **Receipt & payment recognition** | Three input modes on the *New* tab: **upload image(s)** (one, or **many at once** → a batch review where each row is editable and duplicates are flagged), **paste text** (copied order/bill details), or **manual entry**. The LLM extracts the core fields (vendor, date, amount, currency, category, **payment method**, tax, unique number) **plus every other field it can read** off an e-invoice (买方/卖方名称 + 纳税人识别号, 发票代码, 校验码, 价税合计大写, 开票人, 备注, line items, …) into a flexible **extra-fields** map shown on the record. You review & confirm before saving. Handles paper invoices **and** Chinese mobile-payment / e-commerce screenshots — WeChat Pay, Alipay, Pinduoduo, JD, Taobao/Tmall, WeChat Mini Shop — mapping their varied fields (订单编号/交易单号/商户单号 → receipt no., 实付/实付款/合计 → amount, 支付时间 → date) and normalizing negative bill amounts. |
+| 🚫 **Duplicate detection** | Two strategies by ticket type, stored in separate tables: **e-invoices** dedup on the normalized invoice number (exact, globally unique); **payment vouchers** dedup by **visual similarity** — a perceptual hash (dHash) is compared against every stored voucher and a match ≥ the configurable threshold (default 80%) is blocked, with the **similarity score shown**. Catches re-screenshots / re-compressions that an exact hash would miss, across all users. |
+| 🤖 **AI query & analysis** | Ask questions in plain language ("spend by category this quarter"). The LLM writes a read-only SQL query that runs against an **isolated, permission-scoped sandbox**, then returns a **conclusion**, an auto-built **bar chart**, and the data table. Shows the active model; falls back to built-in aggregations on error/offline. |
+| ✅ **Approval workflow** | Records flow through `pending → approved / rejected / paid`. Admins review with an optional note; owners can edit only while `pending`. |
+| 📊 **Dashboard** | Per-role summary cards plus spend-by-month and spend-by-category charts. |
+| 🔎 **Search / filter / export** | Filter by status, category, date range and free text; paginate; export to CSV. |
+| 🧾 **Audit log** | Every notable action (login, create, edit, review, role change) is recorded for traceability. |
+| 🧮 **Sales invoice → accounting voucher** | A separate module for the **revenue side**: upload a **sales invoice (销售发票)** image (or enter it manually), extract its fields with the same vision pipeline, then **auto-generate a balanced double-entry accounting voucher (记账凭证)** from a built-in default template (借 应收账款 / 贷 主营业务收入 / 贷 应交税费——应交增值税（销项税额）). Lines are fully **editable with live balance enforcement** (Σ借 = Σ贷), vouchers are numbered per accounting period, admins **post (过账)** them, and everything **exports to CSV** (one row per journal line). |
+
+---
+
+## Language / 本地化
+
+The UI ships in **Simplified Chinese (简体中文)**, and the LLM is prompted to
+return Chinese categories and descriptions. Display strings are centralized to
+keep re-localization easy:
+
+- **Status / role / action / entity labels** — `app/models.py`
+  (`STATUS_LABELS`, `ROLE_LABELS`, `ACTION_LABELS`, `ENTITY_LABELS`), surfaced
+  via Jinja filters (`status_label`, `role_label`, …).
+- **Categories** — `CATEGORIES` in `app/services/expenses.py`.
+- **Page text** — the Jinja templates in `app/templates/`.
+- **LLM prompts** — `app/llm/extraction.py` and `app/llm/analysis.py`.
+
+Stored enum *values* (e.g. `pending`, `admin`) remain English for stability;
+only their displayed labels are translated.
+
+---
+
+## Quickstart
+
+```bash
+cd expense-system
+./run.sh
+```
+
+`run.sh` creates a virtualenv, installs dependencies, copies `.env.example` →
+`.env`, seeds demo data, and starts the server at **http://localhost:8000**.
+
+Or manually:
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload     # accounts are auto-created on first start
+```
+
+### Demo accounts
+
+On first startup, when the database is empty, the app **auto-creates** these
+accounts (set `AUTO_SEED=false` to disable):
+
+| Role  | Username | Password   |
+|-------|----------|------------|
+| Admin | `admin`  | `admin123` |
+| User  | `alice`  | `alice123` |
+
+You can also (re)create them explicitly with `python -m scripts.seed`.
+
+> **Change these before any real deployment.**
+>
+> **Can't log in?** It almost always means the server is reading a *different*
+> SQLite file than the one that was seeded. The default DB path is now anchored
+> to the project directory (`expense-system/expense.db`) so this can't happen
+> from a stray working directory — but if you set a custom relative
+> `DATABASE_URL`, make sure the seed step and the server use the same one. The
+> seed script prints the exact DB path it wrote to.
+
+---
+
+## Configuration
+
+All settings come from environment variables (or a `.env` file). See
+[`.env.example`](.env.example).
+
+| Variable | Default | Notes |
+|----------|---------|-------|
+| `SECRET_KEY` | `dev-secret-change-me` | Signs session cookies — **must** be changed in production. |
+| `DATABASE_URL` | `sqlite:///<project>/expense.db` | Project-anchored absolute path by default. Any SQLAlchemy URL works. |
+| `UPLOAD_DIR` | `<project>/uploads` | Where receipt images are stored. |
+| `MAX_UPLOAD_MB` | `10` | Max image size. |
+| `DEFAULT_CURRENCY` | `CNY` | Default for new records. |
+| `AUTO_SEED` | `true` | Auto-create demo accounts when the DB is empty. |
+| `IMAGE_SIMILARITY_THRESHOLD` | `0.80` | Payment vouchers ≥ this perceptual-hash similarity are treated as duplicates. |
+| `LLM_API_KEY` | *(empty)* | Empty → **offline mode**. |
+| `LLM_BASE_URL` | `https://api.openai.com/v1` | OpenAI-compatible endpoint. |
+| `LLM_MODEL` | `gpt-4o-mini` | Text model (analysis). |
+| `LLM_VISION_MODEL` | `gpt-4o` | Vision model (receipt OCR). |
+
+### Example providers
+
+| Provider | `LLM_BASE_URL` | text / vision models |
+|----------|----------------|----------------------|
+| OpenAI | `https://api.openai.com/v1` | `gpt-4o-mini` / `gpt-4o` |
+| DeepSeek | `https://api.deepseek.com/v1` | `deepseek-chat` |
+| Qwen (DashScope) | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `qwen-plus` / `qwen-vl-plus` |
+| Moonshot | `https://api.moonshot.cn/v1` | `moonshot-v1-8k` / `moonshot-v1-8k-vision-preview` |
+| OpenRouter | `https://openrouter.ai/api/v1` | `deepseek/deepseek-chat` / `qwen/qwen-2-vl-7b-instruct` |
+| Ollama (local) | `http://localhost:11434/v1` | `llama3.1` / `llama3.2-vision` |
+
+> **`404 No allowed providers are available for the selected model`** (and similar
+> "provider/model not available" errors) mean your **key works but `LLM_MODEL`
+> isn't served by your gateway** — not a key problem. Set `LLM_MODEL` (and
+> `LLM_VISION_MODEL` for OCR) to a model your account/gateway actually offers
+> (e.g. on OpenRouter use a `provider/model` name like `deepseek/deepseek-chat`).
+> The Analyze page shows the current model and falls back to built-in stats on error.
+
+Receipt OCR requires the configured **vision** model to accept image input.
+
+---
+
+## How it works
+
+### Ticket types & duplicate detection
+The two voucher types live in **separate tables** (`e_invoices`,
+`payment_vouchers`) sharing a common `expenses` base (joined-table inheritance),
+so listing, dashboard, analytics, review and CSV all work across both while each
+type keeps its own dedup logic:
+
+- **电子发票 (e-invoice)** — the image is OCR'd and the **invoice number** is the
+  dedup key (required). Numbers are normalized (whitespace stripped, upper-cased)
+  and globally unique (`UNIQUE` on `e_invoices.invoice_number`).
+- **支付凭证 (payment voucher)** — the **image is stored** and a **perceptual
+  hash (dHash)** is computed. On upload the picture is compared against *all*
+  stored vouchers; the best similarity is shown, and a match at or above
+  `IMAGE_SIMILARITY_THRESHOLD` (default `0.80`) is treated as a duplicate. This
+  catches re-screenshots / re-compressions (and status-bar differences) that an
+  exact byte hash would miss — across all users.
+
+Duplicates are pre-warned at the review step (with the similarity score) and
+hard-blocked on save, **showing which existing record they conflict with** —
+linked when the current user may view it, or a privacy-preserving "submitted by
+another user" note otherwise. The image hash is recomputed server-side on save,
+so a client can't bypass the check. An old single-table database is migrated into the
+new tables automatically on first start.
+
+### AI analysis safety model
+Natural-language questions never touch the live database directly. Instead:
+
+1. The rows the current user is **allowed to see** (own records for users, all
+   records for admins) are copied into a fresh **in-memory SQLite** database
+   containing only an `expenses` table — no users, no password hashes, no other
+   people's data.
+2. The LLM writes a single SQL query, which is validated to be a **read-only
+   `SELECT`/`WITH`** (no DML/DDL, no statement chaining) and run with
+   `PRAGMA query_only = ON`.
+3. The result is fed back to the LLM for a concise, factual summary.
+
+Because the sandbox only ever contains permission-scoped rows, even a maliciously
+generated query cannot read data the user shouldn't see.
+
+### Sales invoices & accounting vouchers
+This module (under **销售凭证** in the navbar) is the revenue-side counterpart to
+reimbursement and lives in its own tables (`sales_invoices`, `vouchers`,
+`voucher_entries`) so it never touches the expense data:
+
+1. A **sales invoice** is captured — image upload (OCR'd by the configured vision
+   model) or manual entry. Invoice numbers are normalized and **globally unique**
+   (`UNIQUE` on `sales_invoices.invoice_number`), so the same invoice can't be
+   booked twice.
+2. From the invoice a **balanced 记账凭证** is generated. The amounts are derived
+   robustly — given any of *价税合计 + 税额*, *价税合计 + 税率*, or *不含税额 + 税额*,
+   the third is computed (`net = total − tax`, or `net = total ÷ (1 + rate)`):
+
+   | 方向 | 会计科目 | 金额 |
+   |------|----------|------|
+   | 借 | 应收账款 *(or 银行存款 / 库存现金 for cash sales — selectable)* | 价税合计 |
+   | 贷 | 主营业务收入 | 不含税金额 |
+   | 贷 | 应交税费——应交增值税（销项税额） | 税额 *(line omitted when tax = 0)* |
+
+3. Vouchers get a **per-period running number** (`记-0001`, scoped to `YYYY-MM`),
+   start as `draft`, and can be **edited line-by-line** — the service rejects any
+   save where Σ借 ≠ Σ贷 (±0.01), so a voucher can never be stored unbalanced.
+4. An **admin posts (过账)** the voucher; posting is also balance-checked. The list
+   and the per-entry **CSV export** are permission-scoped (users see their own,
+   admins see all), with a UTF-8 BOM for Excel.
+
+Single revenue line + single VAT line per invoice is the v1 scope; multi-line /
+mixed-rate invoices and 金蝶/用友-specific import formats are noted follow-ups.
+
+---
+
+## Testing
+
+```bash
+source .venv/bin/activate
+pytest
+```
+
+Covers password hashing, auth/role gating, duplicate detection, cross-user
+access control, receipt-extraction parsing (with a fake LLM), the analysis
+SQL-safety validator + sandbox isolation, and the **sales-voucher** module
+(amount derivation, balanced line generation, invoice-number dedup, balance
+enforcement on edit, admin posting, scoped listing, extraction parsing, and an
+end-to-end sales-invoice → voucher → CSV flow). The LLM is faked in tests, so no
+API key or network is required.
+
+---
+
+## Docker
+
+```bash
+docker compose up --build
+# then, once running, seed demo data:
+docker compose exec app python -m scripts.seed
+```
+
+Data (SQLite DB + uploads) persists in the `expense_data` volume.
+
+---
+
+## Project structure
+
+```
+expense-system/
+├── app/
+│   ├── main.py            # FastAPI app, middleware, exception handlers
+│   ├── config.py          # settings (env / .env)
+│   ├── database.py        # engine, session, Base
+│   ├── models.py          # User, Expense, AuditLog, SalesInvoice, Voucher, VoucherEntry
+│   ├── schemas.py         # ReceiptExtraction, SalesInvoiceExtraction (Pydantic)
+│   ├── accounting.py      # chart of accounts / default voucher template
+│   ├── security.py        # bcrypt hashing + sessions
+│   ├── deps.py            # auth/role dependencies
+│   ├── templating.py      # Jinja2 setup + filters
+│   ├── llm/               # OpenAI-compatible client, extraction, sales, analysis
+│   ├── services/          # auth, expenses, vouchers, audit business logic
+│   ├── routers/           # auth, expenses, vouchers, analytics, admin routes
+│   ├── templates/         # Jinja2 HTML
+│   └── static/            # CSS / JS
+├── scripts/seed.py        # demo data
+├── tests/                 # pytest suite
+├── Dockerfile, docker-compose.yml, run.sh
+└── requirements.txt
+```
+
+---
+
+## Security notes & roadmap
+
+This is a solid foundation intended for **authorized internal use**. Before a
+production deployment consider:
+
+- **CSRF protection** on state-changing POSTs (cookies are `SameSite=Lax` today).
+- Serving over **HTTPS** and setting `Secure` cookies.
+- Rate limiting on login and upload endpoints.
+- Per-currency handling in analytics (amounts are not auto-converted).
+- Cleanup of orphaned uploads when a review step is abandoned.
+- Switching from SQLite to Postgres for concurrent multi-user load.

@@ -1,0 +1,6 @@
+# Python virtual environments / caches (repo-level)
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/

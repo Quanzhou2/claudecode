@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}编辑 #{{ expense.id }} · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>编辑记录 #{{ expense.id }}</h1>
+  <span class="badge {{ 'badge-admin' if expense.ticket_type == 'payment' else 'badge-user' }}">
+    {{ expense.ticket_type | ticket_type_label }}
+  </span>
+</div>
+<div class="card">
+  <form method="post" action="/expenses/{{ expense.id }}/edit">
+    {% if expense.ticket_type == 'payment' %}
+    <label>支付单号 / 交易号
+      <input name="number" value="{{ expense.payment_number or '' }}">
+    </label>
+    {% else %}
+    <label>发票号码
+      <input name="number" value="{{ expense.invoice_number or '' }}">
+    </label>
+    {% endif %}
+    <div class="form-row">
+      <label>日期
+        <input name="expense_date" type="date" value="{{ expense.expense_date or '' }}">
+      </label>
+      <label>金额
+        <input name="amount" type="number" step="0.01" value="{{ expense.amount }}" required>
+      </label>
+      <label>币种
+        <input name="currency" value="{{ expense.currency }}" maxlength="8">
+      </label>
+    </div>
+    <div class="form-row">
+      <label>商户
+        <input name="vendor" value="{{ expense.vendor or '' }}">
+      </label>
+      <label>分类
+        <select name="category">
+          <option value="">—</option>
+          {% for c in categories %}
+            <option value="{{ c }}" {{ 'selected' if expense.category == c }}>{{ c }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>税额
+        <input name="tax_amount" type="number" step="0.01"
+               value="{{ expense.tax_amount if expense.tax_amount is not none else '' }}">
+      </label>
+    </div>
+    <label>支付方式
+      <input name="payment_method" value="{{ expense.payment_method or '' }}"
+             placeholder="如 微信支付·零钱 / 支付宝·余额宝 / 拼多多·多多支付">
+    </label>
+    <label>描述
+      <textarea name="description" rows="2">{{ expense.description or '' }}</textarea>
+    </label>
+    {% if expense.ticket_type == 'einvoice' %}
+    <label>其他字段（JSON，可编辑）
+      <textarea name="extra_fields" rows="8">{{ expense.extra_fields_dict | json_zh }}</textarea>
+    </label>
+    {% endif %}
+    <div class="actions">
+      <button class="btn btn-primary" type="submit">保存修改</button>
+      <a class="btn-link" href="/expenses/{{ expense.id }}">取消</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

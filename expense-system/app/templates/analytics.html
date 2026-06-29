@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}智能分析 · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>向数据提问</h1>
+  {% if scope_count is defined %}
+    <span class="muted">正在查询你可访问的 {{ scope_count }} 条记录</span>
+  {% endif %}
+</div>
+
+<div class="card">
+  <form method="post" action="/analytics">
+    <label>用自然语言提问
+      <input name="question" id="question" value="{{ question or '' }}"
+             placeholder="例如：本年度各分类已通过报销的合计金额" autofocus>
+    </label>
+    <div class="chips">
+      {% for s in suggested %}
+        <button type="button" class="chip" onclick="document.getElementById('question').value=this.textContent">{{ s }}</button>
+      {% endfor %}
+    </div>
+    <button class="btn btn-primary" type="submit">开始分析</button>
+    {% if llm_enabled and llm_model %}
+      <p class="muted" style="margin-top:.6rem">当前对话模型：<code>{{ llm_model }}</code></p>
+    {% endif %}
+  </form>
+</div>
+
+{% if result %}
+<div class="card">
+  <h2>分析结果</h2>
+  {% if result.error %}
+    <div class="alert alert-error">
+      {{ result.error }}
+      {% if ('404' in result.error) or ('provider' in result.error|lower) or ('model' in result.error|lower) %}
+        <br><span class="muted">提示：当前对话模型为 <code>{{ llm_model }}</code>，
+        请确认你的服务商支持该模型，并在 <code>.env</code> 中相应设置
+        <code>LLM_MODEL</code>（如 <code>deepseek/deepseek-chat</code>）。已为你回退到内置统计。</span>
+      {% endif %}
+    </div>
+  {% endif %}
+  {% if result.summary %}<p class="summary"><strong>结论：</strong>{{ result.summary }}</p>{% endif %}
+
+  {% if chart %}
+  <div class="chart-block">
+    <h3 class="muted">图表：{{ chart.label_label }} × {{ chart.value_label }}</h3>
+    <div class="bars">
+      {% for it in chart.bars %}
+      <div class="bar-row">
+        <span class="bar-label" title="{{ it.label }}">{{ it.label }}</span>
+        <span class="bar-track"><span class="bar-fill" style="width: {{ it.pct }}%"></span></span>
+        <span class="bar-value">{{ it.value | money }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if result.used_llm and result.sql %}
+    <details class="sql-box">
+      <summary>生成的 SQL{% if result.explanation %} — {{ result.explanation }}{% endif %}</summary>
+      <pre>{{ result.sql }}</pre>
+    </details>
+  {% endif %}
+
+  {% if result.columns %}
+  <div class="table-wrap">
+  <table class="data-table">
+    <thead><tr>{% for c in result.columns %}<th>{{ c }}</th>{% endfor %}</tr></thead>
+    <tbody>
+      {% for row in result.rows %}
+        <tr>{% for cell in row %}<td>{{ cell if cell is not none else '—' }}</td>{% endfor %}</tr>
+      {% else %}
+        <tr><td colspan="{{ result.columns | length }}" class="muted center">没有匹配的数据。</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+
+  {% if not llm_enabled %}
+    <p class="muted">离线模式：显示内置的分类统计。配置 <code>LLM_API_KEY</code>
+    后可使用自由文本的自然语言分析。</p>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

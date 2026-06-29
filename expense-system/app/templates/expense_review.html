@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}核对发票 · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>核对并保存</h1>
+  <span class="badge {{ 'badge-admin' if ticket_type == 'payment' else 'badge-user' }}">
+    {{ (ticket_type or 'einvoice') | ticket_type_label }}
+  </span>
+</div>
+
+{% if data.llm_used %}
+  <div class="alert alert-ok">
+    已自动识别字段
+    {% if data.confidence %}（置信度 {{ (data.confidence * 100) | round }}%）{% endif %}，
+    请核对后保存。
+  </div>
+{% endif %}
+
+{% if duplicate %}
+  {% set dup_viewable = current_user.is_admin or duplicate.user_id == current_user.id %}
+  <div class="alert alert-error">
+    ⚠ <strong>检测到重复凭证</strong>
+    {% if match_score is not none %}（图片相似度 {{ (match_score * 100) | round | int }}%）{% endif %} —
+    {% if dup_viewable %}
+      与已存在记录 <a href="/expenses/{{ duplicate.id }}">#{{ duplicate.id }}</a>
+      （提交人 {{ duplicate.owner.username }}，{{ duplicate.status | status_label }}）重复。
+    {% else %}
+      与已存在记录 <strong>#{{ duplicate.id }}</strong>（由其他用户提交）重复。
+    {% endif %}
+    {% if (ticket_type or 'einvoice') == 'payment' %}支付凭证按<strong>图片相似度</strong>查重{% else %}电子发票按<strong>发票号码</strong>查重{% endif %}，
+    为防止重复报销已拦截。
+  </div>
+{% elif match_score %}
+  <div class="alert alert-info">
+    与已有支付凭证的最高图片相似度为 <strong>{{ (match_score * 100) | round | int }}%</strong>，
+    未达到重复阈值，可继续保存。
+  </div>
+{% endif %}
+
+<div class="grid-2">
+  <div class="card">
+    <form method="post" action="/expenses">
+      <input type="hidden" name="image_path" value="{{ image_filename or '' }}">
+      <input type="hidden" name="raw" value="{{ raw or '' }}">
+      <input type="hidden" name="ticket_type" value="{{ ticket_type or 'einvoice' }}">
+
+      {% if current_user.is_admin and users %}
+      <label>提交人
+        <select name="submitter">
+          {% for u in users %}
+            <option value="{{ u.username }}" {{ 'selected' if (selected_submitter or current_user.username) == u.username }}>{{ u.username }}{% if u.full_name %}（{{ u.full_name }}）{% endif %}</option>
+          {% endfor %}
+        </select>
+      </label>
+      {% endif %}
+
+      <label>{{ '发票号码（电子发票必填）' if (ticket_type or 'einvoice') == 'einvoice' else '支付单号 / 交易号（选填）' }}
+        <input name="number" value="{{ data.receipt_number or '' }}"
+               class="{{ 'input-error' if (duplicate and (ticket_type or 'einvoice') != 'payment') }}">
+      </label>
+      <div class="form-row">
+        <label>日期
+          <input name="expense_date" type="date" value="{{ data.expense_date or '' }}">
+        </label>
+        <label>金额
+          <input name="amount" type="number" step="0.01" value="{{ data.amount or '' }}" required>
+        </label>
+        <label>币种
+          <input name="currency" value="{{ data.currency or default_currency }}" maxlength="8">
+        </label>
+      </div>
+      <div class="form-row">
+        <label>商户
+          <input name="vendor" value="{{ data.vendor or '' }}">
+        </label>
+        <label>分类
+          <select name="category">
+            <option value="">—</option>
+            {% for c in categories %}
+              <option value="{{ c }}" {{ 'selected' if data.category == c }}>{{ c }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>税额
+          <input name="tax_amount" type="number" step="0.01" value="{{ data.tax_amount or '' }}">
+        </label>
+      </div>
+      <label>支付方式
+        <input name="payment_method" value="{{ data.payment_method or '' }}"
+               placeholder="如 微信支付·零钱 / 支付宝·余额宝 / 拼多多·多多支付">
+      </label>
+      <label>描述
+        <textarea name="description" rows="2">{{ data.description or '' }}</textarea>
+      </label>
+
+      {% if (ticket_type or 'einvoice') == 'einvoice' %}
+        {% if data.extra_fields %}
+          <details open class="extra-box">
+            <summary>识别到的其他字段（{{ data.extra_fields | length }}）</summary>
+            <table class="kv">
+              {% for k, v in data.extra_fields.items() %}
+                <tr><th>{{ k }}</th><td>{{ v }}</td></tr>
+              {% endfor %}
+            </table>
+            <label class="muted">可编辑（JSON）
+              <textarea name="extra_fields" rows="6">{{ data.extra_fields | json_zh }}</textarea>
+            </label>
+          </details>
+        {% else %}
+          <input type="hidden" name="extra_fields" value="">
+        {% endif %}
+      {% endif %}
+
+      <div class="actions">
+        <button class="btn btn-primary" type="submit">保存记录</button>
+        <a class="btn-link" href="/expenses/new">取消</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>凭证图片</h2>
+    {% if image_filename %}
+      <a href="/expenses/preview/{{ image_filename }}" target="_blank">
+        <img class="receipt-img" src="/expenses/preview/{{ image_filename }}" alt="凭证">
+      </a>
+    {% else %}
+      <p class="muted">无图片。</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

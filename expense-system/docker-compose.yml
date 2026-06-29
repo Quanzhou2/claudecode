@@ -1,0 +1,20 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      DATABASE_URL: sqlite:////data/expense.db
+      UPLOAD_DIR: /data/uploads
+      DEFAULT_CURRENCY: ${DEFAULT_CURRENCY:-CNY}
+      # LLM (OpenAI-compatible). Leave LLM_API_KEY empty for offline mode.
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.openai.com/v1}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+      LLM_VISION_MODEL: ${LLM_VISION_MODEL:-gpt-4o}
+    volumes:
+      - expense_data:/data
+
+volumes:
+  expense_data:

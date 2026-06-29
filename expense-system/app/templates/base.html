@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ app_name }}{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🧾</text></svg>">
+</head>
+<body>
+{% if current_user %}
+<nav class="navbar">
+  <a class="brand" href="/">🧾 {{ app_name }}</a>
+  <div class="nav-links">
+    <a href="/">工作台</a>
+    <a href="/expenses">报销记录</a>
+    <a href="/expenses/new">+ 新建</a>
+    <a href="/vouchers">销售凭证</a>
+    <a href="/analytics">智能分析</a>
+    {% if current_user.is_admin %}
+      <a href="/admin/users">用户管理</a>
+      <a href="/admin/audit">审计日志</a>
+    {% endif %}
+  </div>
+  <div class="nav-user">
+    <span class="user-chip">
+      {{ current_user.username }}
+      <span class="badge {{ 'badge-admin' if current_user.is_admin else 'badge-user' }}">
+        {{ current_user.role | role_label }}
+      </span>
+    </span>
+    <a class="btn-link" href="/logout">退出</a>
+  </div>
+</nav>
+{% endif %}
+
+<main class="container">
+  {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+  {% if message %}<div class="alert alert-ok">{{ message }}</div>{% endif %}
+  {% if not llm_enabled and current_user %}
+    <div class="alert alert-info">
+      AI 当前处于<strong>离线模式</strong>（未配置 API 密钥）。发票字段可手动录入，
+      分析将使用内置统计。配置 <code>LLM_API_KEY</code> 后即可启用自动识别与自然语言分析。
+    </div>
+  {% endif %}
+  {% block content %}{% endblock %}
+</main>
+
+<footer class="footer">{{ app_name }} · 仅限授权内部使用</footer>
+{% block scripts %}{% endblock %}
+</body>
+</html>

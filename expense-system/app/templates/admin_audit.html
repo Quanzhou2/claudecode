@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}审计日志 · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>审计日志</h1><span class="muted">最近 200 条事件</span></div>
+<div class="card">
+  <div class="table-wrap">
+  <table class="data-table">
+    <thead><tr><th>时间</th><th>操作人</th><th>动作</th><th>对象</th><th>详情</th></tr></thead>
+    <tbody>
+    {% for l in logs %}
+      <tr>
+        <td class="mono">{{ l.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td>{{ l.actor.username if l.actor else '系统' }}</td>
+        <td><span class="badge badge-user">{{ l.action | action_label }}</span></td>
+        <td>{{ l.entity_type | entity_label }}{% if l.entity_id %} #{{ l.entity_id }}{% endif %}</td>
+        <td class="muted">{{ l.detail or '' }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="5" class="muted center">暂无活动记录。</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endblock %}

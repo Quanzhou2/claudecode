@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}编辑凭证 {{ voucher.code }} · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>编辑凭证 {{ voucher.code }}</h1></div>
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+
+<datalist id="accts">{% for a in accounts %}<option value="{{ a }}">{% endfor %}</datalist>
+
+<div class="card">
+  <form method="post" action="/vouchers/{{ voucher.id }}/edit">
+    <div class="form-row">
+      <label>摘要
+        <input name="summary" value="{{ voucher.summary or '' }}">
+      </label>
+      <label>凭证日期
+        <input name="voucher_date" type="date" value="{{ voucher.voucher_date or '' }}">
+      </label>
+    </div>
+
+    <div class="table-wrap">
+    <table class="data-table" id="entries">
+      <thead><tr><th>摘要</th><th>会计科目</th><th class="num">借方</th><th class="num">贷方</th></tr></thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td><input name="line_summary" value="{{ r.summary }}"></td>
+          <td><input name="line_account" list="accts" value="{{ r.account }}"></td>
+          <td><input name="line_debit" type="number" step="0.01" value="{{ r.debit }}"></td>
+          <td><input name="line_credit" type="number" step="0.01" value="{{ r.credit }}"></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    <p><button class="btn" type="button" id="addRow">+ 添加一行</button>
+       <span class="muted">借贷必须平衡（合计借方 = 合计贷方）。</span></p>
+
+    <div class="actions">
+      <button class="btn btn-primary" type="submit">保存</button>
+      <a class="btn-link" href="/vouchers/{{ voucher.id }}">取消</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  document.getElementById('addRow').addEventListener('click', () => {
+    const tbody = document.querySelector('#entries tbody');
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td><input name="line_summary"></td>' +
+      '<td><input name="line_account" list="accts"></td>' +
+      '<td><input name="line_debit" type="number" step="0.01"></td>' +
+      '<td><input name="line_credit" type="number" step="0.01"></td>';
+    tbody.appendChild(tr);
+  });
+</script>
+{% endblock %}
