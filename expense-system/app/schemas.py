@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 from datetime import date
+from typing import Annotated
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, BeforeValidator, Field, field_validator
 
 
 class ReceiptExtraction(BaseModel):
@@ -71,3 +72,73 @@ class ReceiptExtraction(BaseModel):
             return abs(float(cleaned)) if cleaned not in ("", "-", ".") else None
         except ValueError:
             return None
+
+
+# --------------------------------------------------------------------------- #
+# Sales invoice extraction (for the accounting-voucher module)
+# --------------------------------------------------------------------------- #
+def _loose_date(v):
+    if v in (None, "", "null"):
+        return None
+    if isinstance(v, date):
+        return v
+    from datetime import datetime
+
+    for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%d/%m/%Y", "%m/%d/%Y", "%Y.%m.%d", "%Y年%m月%d日"):
+        try:
+            return datetime.strptime(str(v).strip(), fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _loose_amount(v):
+    if v in (None, "", "null"):
+        return None
+    if isinstance(v, (int, float)):
+        return abs(float(v))
+    cleaned = "".join(c for c in str(v) if c.isdigit() or c in ".-")
+    try:
+        return abs(float(cleaned)) if cleaned not in ("", "-", ".") else None
+    except ValueError:
+        return None
+
+
+def _loose_extra(v):
+    if not isinstance(v, dict):
+        return {}
+    out: dict[str, str] = {}
+    for key, val in v.items():
+        if key is None or val is None or val == "":
+            continue
+        if isinstance(val, (dict, list)):
+            import json
+            val = json.dumps(val, ensure_ascii=False)
+        out[str(key)] = str(val)
+    return out
+
+
+_LooseDate = Annotated[date | None, BeforeValidator(_loose_date)]
+_LooseAmount = Annotated[float | None, BeforeValidator(_loose_amount)]
+_LooseExtra = Annotated[dict[str, str], BeforeValidator(_loose_extra)]
+
+
+class SalesInvoiceExtraction(BaseModel):
+    """Structured fields extracted from a sales (VAT) invoice image."""
+
+    invoice_number: str | None = None
+    invoice_code: str | None = None
+    invoice_date: _LooseDate = None
+    buyer: str | None = None
+    buyer_tax_id: str | None = None
+    seller: str | None = None
+    seller_tax_id: str | None = None
+    net_amount: _LooseAmount = None      # 不含税金额
+    tax_amount: _LooseAmount = None      # 税额（销项）
+    tax_rate: str | None = None          # 税率，如 "13%"
+    total_amount: _LooseAmount = None    # 价税合计
+    goods: str | None = None             # 货物或应税劳务名称
+    extra_fields: _LooseExtra = Field(default_factory=dict)
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    llm_used: bool = False
+

@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}销售凭证 · {{ app_name }}{% endblock %}
+{% block content %}
+{% set qs = "status=" ~ filters.status ~ "&date_from=" ~ filters.date_from ~ "&date_to=" ~ filters.date_to %}
+<div class="page-head">
+  <h1>销售凭证</h1>
+  <div class="actions">
+    <a class="btn" href="/vouchers/export.csv?status={{ filters.status }}">⬇ 导出 CSV</a>
+    <a class="btn btn-primary" href="/sales/new">+ 录入销售发票</a>
+  </div>
+</div>
+
+<form class="filters card" method="get" action="/vouchers">
+  <select name="status">
+    <option value="">全部状态</option>
+    {% for s in statuses %}
+      <option value="{{ s }}" {{ 'selected' if filters.status == s }}>{{ s | voucher_status_label }}</option>
+    {% endfor %}
+  </select>
+  <input name="date_from" type="date" value="{{ filters.date_from }}" title="起始日期">
+  <input name="date_to" type="date" value="{{ filters.date_to }}" title="结束日期">
+  <button class="btn" type="submit">筛选</button>
+  <a class="btn-link" href="/vouchers">重置</a>
+</form>
+
+<div class="card">
+  <p class="muted">共 {{ total }} 张凭证</p>
+  <div class="table-wrap">
+  <table class="data-table">
+    <thead><tr>
+      <th>凭证号</th>
+      {% if current_user.is_admin %}<th>制单人</th>{% endif %}
+      <th>日期</th><th>摘要</th><th class="num">金额</th><th>状态</th><th>平衡</th>
+    </tr></thead>
+    <tbody>
+    {% for v in items %}
+      <tr class="clickable" onclick="location.href='/vouchers/{{ v.id }}'">
+        <td class="mono">{{ v.code }}</td>
+        {% if current_user.is_admin %}<td>{{ v.owner.username if v.owner else '—' }}</td>{% endif %}
+        <td>{{ v.voucher_date or '—' }}</td>
+        <td>{{ v.summary or '—' }}</td>
+        <td class="num">{{ v.total_debit | money }}</td>
+        <td><span class="badge {{ 'badge-approved' if v.status.value == 'posted' else 'badge-pending' }}">{{ v.status | voucher_status_label }}</span></td>
+        <td>{% if v.is_balanced %}✓{% else %}<span class="badge badge-rejected">不平</span>{% endif %}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="7" class="muted center">暂无凭证。</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+
+  {% if pages > 1 %}
+  <div class="pagination">
+    {% for p in range(1, pages + 1) %}
+      <a class="page {{ 'active' if p == page }}" href="/vouchers?page={{ p }}&{{ qs }}">{{ p }}</a>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

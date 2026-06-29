@@ -14,6 +14,7 @@ from .models import (
     ROLE_LABELS,
     STATUS_LABELS,
     TICKET_TYPE_LABELS,
+    VOUCHER_STATUS_LABELS,
     User,
 )
 
@@ -64,6 +65,11 @@ def _ticket_type_label(value: Any) -> str:
     return TICKET_TYPE_LABELS.get(str(value), str(value))
 
 
+def _voucher_status_label(value: Any) -> str:
+    key = getattr(value, "value", value)
+    return VOUCHER_STATUS_LABELS.get(str(key), str(key))
+
+
 def _json_zh(value: Any) -> str:
     """Pretty JSON with Chinese kept readable (no \\uXXXX escaping)."""
     import json
@@ -80,6 +86,7 @@ templates.env.filters["role_label"] = _role_label
 templates.env.filters["action_label"] = _action_label
 templates.env.filters["entity_label"] = _entity_label
 templates.env.filters["ticket_type_label"] = _ticket_type_label
+templates.env.filters["voucher_status_label"] = _voucher_status_label
 templates.env.filters["json_zh"] = _json_zh
 
 

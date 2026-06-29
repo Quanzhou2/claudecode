@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}录入销售发票 · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>录入销售发票</h1>
+  <a class="btn-link" href="/sales/manual">或手动录入 →</a>
+</div>
+
+<p class="muted">
+  上传<strong>销售发票（增值税发票）</strong>图片，系统会识别字段并按内置模板自动生成
+  <strong>记账凭证（借贷分录）</strong>，供你核对后保存。
+</p>
+
+<div class="card" style="max-width:560px">
+  <h2>📷 上传发票图片</h2>
+  <form method="post" action="/sales/extract" enctype="multipart/form-data">
+    <label class="dropzone" id="dropzone">
+      <input type="file" name="file" id="fileInput" accept="image/*" required hidden>
+      <div id="dropText">点击选择销售发票图片（JPG / PNG / WEBP / GIF）</div>
+      <img id="preview" alt="预览" hidden>
+    </label>
+    <button class="btn btn-primary" type="submit" id="submitBtn">识别并生成凭证 →</button>
+  </form>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const input = document.getElementById('fileInput');
+  const preview = document.getElementById('preview');
+  const dropText = document.getElementById('dropText');
+  input.addEventListener('change', () => {
+    const f = input.files[0];
+    if (!f) return;
+    preview.src = URL.createObjectURL(f);
+    preview.hidden = false;
+    dropText.textContent = f.name;
+  });
+  input.closest('form').addEventListener('submit', () => {
+    const b = document.getElementById('submitBtn');
+    b.textContent = '识别中…';
+    b.disabled = true;
+  });
+</script>
+{% endblock %}

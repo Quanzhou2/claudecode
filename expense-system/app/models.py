@@ -189,3 +189,122 @@ class AuditLog(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     actor: Mapped["User | None"] = relationship()
+
+
+# --------------------------------------------------------------------------- #
+# Sales-invoice → accounting voucher (记账凭证) module
+# --------------------------------------------------------------------------- #
+class VoucherStatus(str, enum.Enum):
+    draft = "draft"
+    posted = "posted"
+
+
+VOUCHER_STATUS_LABELS = {"draft": "草稿", "posted": "已过账"}
+
+
+class SalesInvoice(Base):
+    """A sales (VAT) invoice — the source document for a voucher."""
+
+    __tablename__ = "sales_invoices"
+    __table_args__ = (
+        UniqueConstraint("invoice_number", name="uq_sales_invoice_number"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    invoice_number: Mapped[str | None] = mapped_column(String(128), index=True)
+    invoice_code: Mapped[str | None] = mapped_column(String(64))
+    invoice_date: Mapped[date | None] = mapped_column(Date, index=True)
+    buyer: Mapped[str | None] = mapped_column(String(255))
+    buyer_tax_id: Mapped[str | None] = mapped_column(String(64))
+    seller: Mapped[str | None] = mapped_column(String(255))
+    seller_tax_id: Mapped[str | None] = mapped_column(String(64))
+    net_amount: Mapped[float] = mapped_column(Float, default=0.0)    # 不含税
+    tax_amount: Mapped[float] = mapped_column(Float, default=0.0)    # 税额（销项）
+    tax_rate: Mapped[str | None] = mapped_column(String(16))
+    total_amount: Mapped[float] = mapped_column(Float, default=0.0)  # 价税合计
+    goods: Mapped[str | None] = mapped_column(Text)
+    image_path: Mapped[str | None] = mapped_column(String(512))
+    extracted_raw: Mapped[str | None] = mapped_column(Text)
+    extra_fields: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    owner: Mapped["User"] = relationship(foreign_keys=[user_id])
+
+    @property
+    def extra_fields_dict(self) -> dict:
+        if not self.extra_fields:
+            return {}
+        try:
+            data = json.loads(self.extra_fields)
+            return data if isinstance(data, dict) else {}
+        except (ValueError, TypeError):
+            return {}
+
+
+class Voucher(Base):
+    """An accounting voucher (记账凭证) — a balanced journal entry."""
+
+    __tablename__ = "vouchers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    sales_invoice_id: Mapped[int | None] = mapped_column(ForeignKey("sales_invoices.id"))
+    voucher_word: Mapped[str] = mapped_column(String(8), default="记")
+    voucher_no: Mapped[int] = mapped_column(Integer, default=1)
+    period: Mapped[str | None] = mapped_column(String(7), index=True)  # YYYY-MM
+    voucher_date: Mapped[date | None] = mapped_column(Date, index=True)
+    summary: Mapped[str | None] = mapped_column(String(255))
+    attachments: Mapped[int] = mapped_column(Integer, default=1)
+    status: Mapped[VoucherStatus] = mapped_column(
+        Enum(VoucherStatus), default=VoucherStatus.draft, index=True
+    )
+    reviewer_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+    owner: Mapped["User"] = relationship(foreign_keys=[user_id])
+    reviewer: Mapped["User | None"] = relationship(foreign_keys=[reviewer_id])
+    sales_invoice: Mapped["SalesInvoice | None"] = relationship(
+        foreign_keys=[sales_invoice_id]
+    )
+    entries: Mapped[list["VoucherEntry"]] = relationship(
+        back_populates="voucher", cascade="all, delete-orphan",
+        order_by="VoucherEntry.line_no",
+    )
+
+    @property
+    def code(self) -> str:
+        return f"{self.voucher_word}-{self.voucher_no:04d}"
+
+    @property
+    def total_debit(self) -> float:
+        return round(sum(e.debit or 0 for e in self.entries), 2)
+
+    @property
+    def total_credit(self) -> float:
+        return round(sum(e.credit or 0 for e in self.entries), 2)
+
+    @property
+    def is_balanced(self) -> bool:
+        return self.total_debit > 0 and abs(self.total_debit - self.total_credit) < 0.01
+
+
+class VoucherEntry(Base):
+    """One debit/credit line of a voucher."""
+
+    __tablename__ = "voucher_entries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    voucher_id: Mapped[int] = mapped_column(ForeignKey("vouchers.id"), index=True)
+    line_no: Mapped[int] = mapped_column(Integer, default=1)
+    summary: Mapped[str | None] = mapped_column(String(255))
+    account: Mapped[str] = mapped_column(String(128))
+    account_code: Mapped[str | None] = mapped_column(String(32))
+    debit: Mapped[float] = mapped_column(Float, default=0.0)
+    credit: Mapped[float] = mapped_column(Float, default=0.0)
+
+    voucher: Mapped["Voucher"] = relationship(back_populates="entries")

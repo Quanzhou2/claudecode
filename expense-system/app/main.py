@@ -12,7 +12,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from .config import get_settings
 from .database import init_db
 from .deps import NotAuthenticatedError, NotAuthorizedError
-from .routers import admin, analytics, auth, expenses
+from .routers import admin, analytics, auth, expenses, vouchers
 from .security import get_current_user
 from .services.expenses import ExpenseError, PermissionDenied
 from .templating import render
@@ -91,4 +91,5 @@ def healthz():
 app.include_router(auth.router)
 app.include_router(expenses.router)
 app.include_router(analytics.router)
+app.include_router(vouchers.router)
 app.include_router(admin.router)

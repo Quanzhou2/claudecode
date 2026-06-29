@@ -26,6 +26,7 @@ analysis falls back to built-in aggregations.
 | 📊 **Dashboard** | Per-role summary cards plus spend-by-month and spend-by-category charts. |
 | 🔎 **Search / filter / export** | Filter by status, category, date range and free text; paginate; export to CSV. |
 | 🧾 **Audit log** | Every notable action (login, create, edit, review, role change) is recorded for traceability. |
+| 🧮 **Sales invoice → accounting voucher** | A separate module for the **revenue side**: upload a **sales invoice (销售发票)** image (or enter it manually), extract its fields with the same vision pipeline, then **auto-generate a balanced double-entry accounting voucher (记账凭证)** from a built-in default template (借 应收账款 / 贷 主营业务收入 / 贷 应交税费——应交增值税（销项税额）). Lines are fully **editable with live balance enforcement** (Σ借 = Σ贷), vouchers are numbered per accounting period, admins **post (过账)** them, and everything **exports to CSV** (one row per journal line). |
 
 ---
 
@@ -169,6 +170,35 @@ Natural-language questions never touch the live database directly. Instead:
 Because the sandbox only ever contains permission-scoped rows, even a maliciously
 generated query cannot read data the user shouldn't see.
 
+### Sales invoices & accounting vouchers
+This module (under **销售凭证** in the navbar) is the revenue-side counterpart to
+reimbursement and lives in its own tables (`sales_invoices`, `vouchers`,
+`voucher_entries`) so it never touches the expense data:
+
+1. A **sales invoice** is captured — image upload (OCR'd by the configured vision
+   model) or manual entry. Invoice numbers are normalized and **globally unique**
+   (`UNIQUE` on `sales_invoices.invoice_number`), so the same invoice can't be
+   booked twice.
+2. From the invoice a **balanced 记账凭证** is generated. The amounts are derived
+   robustly — given any of *价税合计 + 税额*, *价税合计 + 税率*, or *不含税额 + 税额*,
+   the third is computed (`net = total − tax`, or `net = total ÷ (1 + rate)`):
+
+   | 方向 | 会计科目 | 金额 |
+   |------|----------|------|
+   | 借 | 应收账款 *(or 银行存款 / 库存现金 for cash sales — selectable)* | 价税合计 |
+   | 贷 | 主营业务收入 | 不含税金额 |
+   | 贷 | 应交税费——应交增值税（销项税额） | 税额 *(line omitted when tax = 0)* |
+
+3. Vouchers get a **per-period running number** (`记-0001`, scoped to `YYYY-MM`),
+   start as `draft`, and can be **edited line-by-line** — the service rejects any
+   save where Σ借 ≠ Σ贷 (±0.01), so a voucher can never be stored unbalanced.
+4. An **admin posts (过账)** the voucher; posting is also balance-checked. The list
+   and the per-entry **CSV export** are permission-scoped (users see their own,
+   admins see all), with a UTF-8 BOM for Excel.
+
+Single revenue line + single VAT line per invoice is the v1 scope; multi-line /
+mixed-rate invoices and 金蝶/用友-specific import formats are noted follow-ups.
+
 ---
 
 ## Testing
@@ -179,9 +209,12 @@ pytest
 ```
 
 Covers password hashing, auth/role gating, duplicate detection, cross-user
-access control, receipt-extraction parsing (with a fake LLM), and the analysis
-SQL-safety validator + sandbox isolation. The LLM is faked in tests, so no API
-key or network is required.
+access control, receipt-extraction parsing (with a fake LLM), the analysis
+SQL-safety validator + sandbox isolation, and the **sales-voucher** module
+(amount derivation, balanced line generation, invoice-number dedup, balance
+enforcement on edit, admin posting, scoped listing, extraction parsing, and an
+end-to-end sales-invoice → voucher → CSV flow). The LLM is faked in tests, so no
+API key or network is required.
 
 ---
 
@@ -205,14 +238,15 @@ expense-system/
 │   ├── main.py            # FastAPI app, middleware, exception handlers
 │   ├── config.py          # settings (env / .env)
 │   ├── database.py        # engine, session, Base
-│   ├── models.py          # User, Expense, AuditLog
-│   ├── schemas.py         # ReceiptExtraction (Pydantic)
+│   ├── models.py          # User, Expense, AuditLog, SalesInvoice, Voucher, VoucherEntry
+│   ├── schemas.py         # ReceiptExtraction, SalesInvoiceExtraction (Pydantic)
+│   ├── accounting.py      # chart of accounts / default voucher template
 │   ├── security.py        # bcrypt hashing + sessions
 │   ├── deps.py            # auth/role dependencies
 │   ├── templating.py      # Jinja2 setup + filters
-│   ├── llm/               # OpenAI-compatible client, extraction, analysis
-│   ├── services/          # auth, expenses, audit business logic
-│   ├── routers/           # auth, expenses, analytics, admin routes
+│   ├── llm/               # OpenAI-compatible client, extraction, sales, analysis
+│   ├── services/          # auth, expenses, vouchers, audit business logic
+│   ├── routers/           # auth, expenses, vouchers, analytics, admin routes
 │   ├── templates/         # Jinja2 HTML
 │   └── static/            # CSS / JS
 ├── scripts/seed.py        # demo data

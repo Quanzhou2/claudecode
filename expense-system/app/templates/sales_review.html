@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}核对并生成凭证 · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>核对发票并生成记账凭证</h1></div>
+
+{% if data.llm_used %}
+  <div class="alert alert-ok">
+    已从发票识别字段{% if data.confidence %}（置信度 {{ (data.confidence * 100) | round }}%）{% endif %}，
+    请核对金额与税额后保存。
+  </div>
+{% endif %}
+
+{% if duplicate %}
+  {% set dv = current_user.is_admin or duplicate.user_id == current_user.id %}
+  <div class="alert alert-error">
+    ⚠ <strong>该销售发票已录入。</strong>
+    {% if dv %}见已有发票记录（凭证可在销售凭证列表查看）{% endif %}
+    发票号码全局唯一，请勿重复录入。
+  </div>
+{% endif %}
+
+<form method="post" action="/sales">
+  <input type="hidden" name="image_path" value="{{ image_filename or '' }}">
+  <input type="hidden" name="raw" value="{{ raw or '' }}">
+  <input type="hidden" name="extra_fields" value="{{ data.extra_fields | json_zh }}">
+
+  <div class="grid-2">
+    <div class="card">
+      <h2>发票信息</h2>
+      <div class="form-row">
+        <label>发票号码（必填）
+          <input name="invoice_number" value="{{ data.invoice_number or '' }}"
+                 class="{{ 'input-error' if duplicate }}" required>
+        </label>
+        <label>发票代码
+          <input name="invoice_code" value="{{ data.invoice_code or '' }}">
+        </label>
+        <label>开票日期
+          <input name="invoice_date" type="date" value="{{ data.invoice_date or '' }}">
+        </label>
+      </div>
+      <div class="form-row">
+        <label>购买方
+          <input name="buyer" value="{{ data.buyer or '' }}">
+        </label>
+        <label>购买方税号
+          <input name="buyer_tax_id" value="{{ data.buyer_tax_id or '' }}">
+        </label>
+      </div>
+      <div class="form-row">
+        <label>销售方
+          <input name="seller" value="{{ data.seller or '' }}">
+        </label>
+        <label>销售方税号
+          <input name="seller_tax_id" value="{{ data.seller_tax_id or '' }}">
+        </label>
+      </div>
+      <label>货物或应税劳务名称
+        <input name="goods" value="{{ data.goods or '' }}">
+      </label>
+      <div class="form-row">
+        <label>价税合计
+          <input name="total_amount" type="number" step="0.01" value="{{ data.total_amount or '' }}">
+        </label>
+        <label>税额（销项）
+          <input name="tax_amount" type="number" step="0.01" value="{{ data.tax_amount or '' }}">
+        </label>
+        <label>税率
+          <input name="tax_rate" list="taxrates" value="{{ data.tax_rate or '' }}" placeholder="如 13%">
+          <datalist id="taxrates">{% for r in tax_rates %}<option value="{{ r }}">{% endfor %}</datalist>
+        </label>
+      </div>
+      <div class="form-row">
+        <label>不含税金额（留空自动计算）
+          <input name="net_amount" type="number" step="0.01" value="{{ data.net_amount or '' }}">
+        </label>
+        <label>借方科目（收款方向）
+          <select name="debit_account">
+            {% for a in debit_accounts %}<option value="{{ a }}">{{ a }}</option>{% endfor %}
+          </select>
+        </label>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>发票图片</h2>
+      {% if image_filename %}
+        <a href="/sales/preview/{{ image_filename }}" target="_blank">
+          <img class="receipt-img" src="/sales/preview/{{ image_filename }}" alt="销售发票">
+        </a>
+      {% else %}
+        <p class="muted">无图片（手动录入）。</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if preview %}
+  <div class="card">
+    <h2>将生成的记账凭证（预览）</h2>
+    <p class="muted">按内置销售模板与当前识别金额生成；保存后可再编辑科目与金额。</p>
+    <div class="table-wrap">
+    <table class="data-table">
+      <thead><tr><th>摘要</th><th>会计科目</th><th class="num">借方</th><th class="num">贷方</th></tr></thead>
+      <tbody>
+        {% for l in preview %}
+        <tr><td>{{ l.summary }}</td><td>{{ l.account }}</td>
+          <td class="num">{{ (l.debit | money) if l.debit else '' }}</td>
+          <td class="num">{{ (l.credit | money) if l.credit else '' }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="actions">
+    <button class="btn btn-primary" type="submit">保存并生成凭证</button>
+    <a class="btn-link" href="/sales/new">取消</a>
+  </div>
+</form>
+{% endblock %}

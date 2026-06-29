@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}凭证 {{ voucher.code }} · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>记账凭证 {{ voucher.code }}
+    <span class="badge {{ 'badge-approved' if voucher.status.value == 'posted' else 'badge-pending' }}">
+      {{ voucher.status | voucher_status_label }}
+    </span>
+    {% if voucher.is_balanced %}<span class="badge badge-approved">借贷平衡</span>
+    {% else %}<span class="badge badge-rejected">借贷不平衡</span>{% endif %}
+  </h1>
+  <div class="actions">
+    {% if can_edit %}<a class="btn" href="/vouchers/{{ voucher.id }}/edit">编辑</a>{% endif %}
+    {% if current_user.is_admin and voucher.status.value != 'posted' %}
+    <form method="post" action="/vouchers/{{ voucher.id }}/post">
+      <button class="btn btn-primary" type="submit">过账</button>
+    </form>
+    {% endif %}
+    <a class="btn" href="/vouchers/export.csv">⬇ 导出</a>
+    <a class="btn-link" href="/vouchers">返回</a>
+  </div>
+</div>
+
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+
+<div class="card">
+  <table class="kv">
+    <tr><th>凭证日期</th><td>{{ voucher.voucher_date or '—' }}</td><th>制单人</th><td>{{ voucher.owner.username }}</td></tr>
+    <tr><th>摘要</th><td>{{ voucher.summary or '—' }}</td><th>附件</th><td>{{ voucher.attachments }} 张</td></tr>
+    {% if voucher.reviewer %}
+    <tr><th>过账人</th><td>{{ voucher.reviewer.username }}</td><th>过账时间</th><td>{{ voucher.reviewed_at.strftime('%Y-%m-%d %H:%M') if voucher.reviewed_at else '—' }}</td></tr>
+    {% endif %}
+  </table>
+</div>
+
+<div class="card">
+  <h2>会计分录</h2>
+  <div class="table-wrap">
+  <table class="data-table">
+    <thead><tr><th>摘要</th><th>会计科目</th><th class="num">借方</th><th class="num">贷方</th></tr></thead>
+    <tbody>
+      {% for e in voucher.entries %}
+      <tr>
+        <td>{{ e.summary or '—' }}</td>
+        <td>{{ e.account }}</td>
+        <td class="num">{{ (e.debit | money) if e.debit else '' }}</td>
+        <td class="num">{{ (e.credit | money) if e.credit else '' }}</td>
+      </tr>
+      {% endfor %}
+      <tr class="total-row">
+        <td></td><td><strong>合计</strong></td>
+        <td class="num"><strong>{{ voucher.total_debit | money }}</strong></td>
+        <td class="num"><strong>{{ voucher.total_credit | money }}</strong></td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+</div>
+
+{% if voucher.sales_invoice %}
+<div class="grid-2">
+  <div class="card">
+    <h2>来源销售发票</h2>
+    <table class="kv">
+      <tr><th>发票号码</th><td class="mono">{{ voucher.sales_invoice.invoice_number or '—' }}</td></tr>
+      <tr><th>购买方</th><td>{{ voucher.sales_invoice.buyer or '—' }}</td></tr>
+      <tr><th>销售方</th><td>{{ voucher.sales_invoice.seller or '—' }}</td></tr>
+      <tr><th>价税合计</th><td>{{ voucher.sales_invoice.total_amount | money }}</td></tr>
+      <tr><th>税额</th><td>{{ voucher.sales_invoice.tax_amount | money }}（{{ voucher.sales_invoice.tax_rate or '—' }}）</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h2>发票图片</h2>
+    {% if voucher.sales_invoice.image_path %}
+      <a href="/vouchers/{{ voucher.id }}/image" target="_blank">
+        <img class="receipt-img" src="/vouchers/{{ voucher.id }}/image" alt="销售发票">
+      </a>
+    {% else %}<p class="muted">无图片。</p>{% endif %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}
