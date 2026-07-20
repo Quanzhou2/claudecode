@@ -186,9 +186,12 @@ jiandaoyun-reimbursement-plugin/
 3. **感知哈希粗筛（可选，`imageHash.js`）**：用 dHash + 汉明距离先粗筛，减少送入 LLM 的候选，
    降低调用成本。需运行环境具备图片解码能力（如 `sharp`/`jimp`），在后端函数入口注入
    `decodeToGrayGrid` 后启用；未启用时按 `maxCandidates` 截断后全部送 LLM。
-4. **LLM 相似度分析（`llmSimilarityClient.js`）**：一次把「上传图 + 一批历史图」发给多模态
-   模型，返回每张的相似度分值；提示词要求把翻拍/重扫/截图/裁剪/调色都视为同一张，仅版式相同
-   但内容不同不算重复。分批比对，命中阈值即停。
+4. **LLM 相似度分析（`llmSimilarityClient.js`）**：走**通用 OpenAI 兼容接口**
+   （`POST /chat/completions`，视觉消息格式，图片以 base64 data URL 传入），一次把
+   「上传图 + 一批历史图」发给多模态模型，返回每张的相似度分值；`endpoint` 可指向任意兼容
+   服务（OpenAI、通义千问 VL、本地 vLLM/Ollama 等），`model` 填该服务的视觉模型名。提示词
+   要求把翻拍/重扫/截图/裁剪/调色都视为同一张，仅版式相同但内容不同不算重复。分批比对，
+   命中阈值即停。
 5. **判重（自研，`similarity.js`）**：取最高相似度，`≥ threshold`（默认 0.9）判为
    `凭证重复`，回显命中的历史报销单。
 
@@ -203,8 +206,9 @@ jiandaoyun-reimbursement-plugin/
 | `invoice.dedup.statusIncludes` | 参与去重的流程状态 | `["已完成","审批通过","已报销"]` |
 | `invoice.dedup.scanLimit` | 去重最多扫描历史条数 | `5000` |
 | `invoice.dedup.alsoMatchCode` | 是否把发票代码纳入去重键 | `true` |
-| `voucher.similarity.provider` | LLM 服务商 | `claude` |
-| `voucher.similarity.model` | 模型 | `claude-opus-4-8` |
+| `voucher.similarity.provider` | LLM 接口类型（OpenAI 兼容） | `openai-compatible` |
+| `voucher.similarity.model` | 视觉模型名（由所用服务提供） | `gpt-4o` |
+| `voucher.similarity.endpointEnv` | 兼容 `/chat/completions` 的服务地址（环境变量名） | `LLM_SIMILARITY_ENDPOINT` |
 | `voucher.similarity.threshold` | 判重阈值 | `0.9` |
 | `voucher.similarity.maxCandidates` | 最多比对历史图片数 | `60` |
 | `voucher.similarity.prefilter.enabled` | 感知哈希粗筛 | `true`（需解码器） |

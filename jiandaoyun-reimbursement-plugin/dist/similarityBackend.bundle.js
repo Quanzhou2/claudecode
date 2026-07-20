@@ -588,7 +588,7 @@ __modules["src/similarity/llmSimilarityClient.js"] = function(module, exports, r
  * 让模型判断新图是否与其中某张为同一张凭证（含翻拍/重扫/裁剪/轻微编辑），
  * 返回每张的相似度分值与最相似项。相较逐对调用，一次多图可显著降低调用次数与成本。
  *
- * provider：claude（Anthropic Messages API）| openai-compatible（/chat/completions）| custom
+ * provider：openai-compatible（默认，POST /chat/completions，视觉模型）| claude（Anthropic Messages API，可选）| custom
  * 依赖注入 http。
  */
 
@@ -608,7 +608,7 @@ const PROMPT = [
  * @param {object} [logger]
  */
 function createLlmSimilarityClient(simCfg, http, logger = console) {
-  const provider = simCfg.provider || 'claude';
+  const provider = simCfg.provider || 'openai-compatible';
 
   /**
    * @param {{base64?:string, mediaType?:string, url?:string}} newImage
@@ -632,17 +632,20 @@ function createLlmSimilarityClient(simCfg, http, logger = console) {
 
 function buildRequest(provider, simCfg, newImage, candidates) {
   const images = [newImage, ...candidates];
-  if (provider === 'openai-compatible') {
+
+  // 可选：claude（Anthropic Messages API）
+  if (provider === 'claude') {
     const content = [{ type: 'text', text: PROMPT }];
     images.forEach((img, i) => {
       content.push({ type: 'text', text: i === 0 ? '【上传图】' : `【历史图#${i - 1}】` });
-      content.push({ type: 'image_url', image_url: { url: toDataUrl(img) } });
+      content.push({ type: 'image', source: toClaudeSource(img) });
     });
     return {
-      url: simCfg.endpoint || 'https://api.openai.com/v1/chat/completions',
+      url: simCfg.endpoint || 'https://api.anthropic.com/v1/messages',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${simCfg.apiKey}`,
+        'x-api-key': simCfg.apiKey,
+        'anthropic-version': '2023-06-01',
       },
       body: {
         model: simCfg.model,
@@ -653,18 +656,17 @@ function buildRequest(provider, simCfg, newImage, candidates) {
     };
   }
 
-  // 默认 claude（Anthropic Messages API）
+  // 默认：openai-compatible（POST /chat/completions，OpenAI 视觉消息格式）
   const content = [{ type: 'text', text: PROMPT }];
   images.forEach((img, i) => {
     content.push({ type: 'text', text: i === 0 ? '【上传图】' : `【历史图#${i - 1}】` });
-    content.push({ type: 'image', source: toClaudeSource(img) });
+    content.push({ type: 'image_url', image_url: { url: toDataUrl(img) } });
   });
   return {
-    url: simCfg.endpoint || 'https://api.anthropic.com/v1/messages',
+    url: simCfg.endpoint || 'https://api.openai.com/v1/chat/completions',
     headers: {
       'Content-Type': 'application/json',
-      'x-api-key': simCfg.apiKey,
-      'anthropic-version': '2023-06-01',
+      Authorization: `Bearer ${simCfg.apiKey}`,
     },
     body: {
       model: simCfg.model,
@@ -689,20 +691,21 @@ function toDataUrl(img) {
 
 function extractText(provider, raw) {
   if (!raw) return '';
-  if (provider === 'openai-compatible') {
-    return (
-      raw.choices &&
-      raw.choices[0] &&
-      raw.choices[0].message &&
-      raw.choices[0].message.content
-    ) || '';
+  // claude（可选）
+  if (provider === 'claude') {
+    if (Array.isArray(raw.content)) {
+      const t = raw.content.find((c) => c.type === 'text');
+      return t ? t.text : '';
+    }
+    return raw.completion || '';
   }
-  // claude
-  if (Array.isArray(raw.content)) {
-    const t = raw.content.find((c) => c.type === 'text');
-    return t ? t.text : '';
-  }
-  return raw.completion || '';
+  // 默认：openai-compatible（choices[0].message.content）
+  return (
+    raw.choices &&
+    raw.choices[0] &&
+    raw.choices[0].message &&
+    raw.choices[0].message.content
+  ) || '';
 }
 
 /** 从模型输出里稳健地解析 JSON。 */
@@ -1113,11 +1116,11 @@ __load("src/shared/config.js").setEmbeddedConfig({
 
   "voucher": {
     "similarity": {
-      "$comment": "付款凭证图片相似度分析（LLM 多模态）。provider：claude | openai-compatible | custom。threshold 超过则判重。",
-      "provider": "claude",
+      "$comment": "付款凭证图片相似度分析（LLM 多模态，OpenAI 兼容接口）。provider：openai-compatible | custom。endpoint 指向兼容 /chat/completions 的服务，model 用其提供的视觉模型名。threshold 超过则判重。",
+      "provider": "openai-compatible",
       "endpointEnv": "LLM_SIMILARITY_ENDPOINT",
       "apiKeyEnv": "LLM_SIMILARITY_API_KEY",
-      "model": "claude-opus-4-8",
+      "model": "gpt-4o",
       "threshold": 0.9,
       "timeoutMs": 30000,
       "maxCandidates": 60,

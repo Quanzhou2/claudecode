@@ -198,11 +198,11 @@ __load("src/shared/config.js").setEmbeddedConfig({
 
   "voucher": {
     "similarity": {
-      "$comment": "付款凭证图片相似度分析（LLM 多模态）。provider：claude | openai-compatible | custom。threshold 超过则判重。",
-      "provider": "claude",
+      "$comment": "付款凭证图片相似度分析（LLM 多模态，OpenAI 兼容接口）。provider：openai-compatible | custom。endpoint 指向兼容 /chat/completions 的服务，model 用其提供的视觉模型名。threshold 超过则判重。",
+      "provider": "openai-compatible",
       "endpointEnv": "LLM_SIMILARITY_ENDPOINT",
       "apiKeyEnv": "LLM_SIMILARITY_API_KEY",
-      "model": "claude-opus-4-8",
+      "model": "gpt-4o",
       "threshold": 0.9,
       "timeoutMs": 30000,
       "maxCandidates": 60,
