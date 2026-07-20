@@ -6,11 +6,13 @@ const { runInvoiceGuard } = require('../src/invoice/invoiceBackend');
 const { fakeConfig, silentLogger } = require('./helpers/fakeConfig');
 
 function deps({ recognize, verify, records }) {
+  const spy = { verifyCalls: 0 };
   return {
+    spy,
     cfg: fakeConfig(),
     logger: silentLogger,
     ocr: { recognize: async () => recognize },
-    verify: { verify: async () => verify },
+    verify: { verify: async () => { spy.verifyCalls += 1; return verify; } },
     dataClient: { queryRecords: async () => records },
   };
 }
@@ -61,6 +63,9 @@ test('invoice: 命中历史重复 -> ok=false, status=发票重复', async () =>
   assert.strictEqual(r.status, '发票重复');
   assert.strictEqual(r.duplicate, true);
   assert.strictEqual(r.matchedRecord.recordNo, 'BX-001');
+  // 新顺序：先查重命中即返回，不应再调用验真，查验次数不 +1
+  assert.strictEqual(d.spy.verifyCalls, 0, '重复票不应触发验真');
+  assert.strictEqual(r.verifyCount, 0, '重复票不递增查验次数');
 });
 
 test('invoice: 全部通过 -> ok=true, status=验证通过', async () => {
@@ -75,6 +80,9 @@ test('invoice: 全部通过 -> ok=true, status=验证通过', async () => {
   assert.strictEqual(r.ok, true);
   assert.strictEqual(r.status, '验证通过');
   assert.strictEqual(r.invoiceNumber, '12345678');
+  // 不重复才验真：验真被调用一次，查验次数 +1
+  assert.strictEqual(d.spy.verifyCalls, 1);
+  assert.strictEqual(r.verifyCount, 1);
 });
 
 test('invoice: 编辑当前记录自身不判重', async () => {

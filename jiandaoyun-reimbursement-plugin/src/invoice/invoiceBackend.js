@@ -78,30 +78,11 @@ async function runInvoiceGuard(params, deps) {
     amountWithTax: inv.amountWithTax,
     checkCode: inv.checkCode,
     sellerTaxNo: inv.sellerTaxNo,
-    verifyCount: priorCount + 1,
+    // 查验次数在真正调用验真时才 +1；重复票不进入验真，故此处先保持原值
+    verifyCount: priorCount,
   };
 
-  // 2) 验真
-  try {
-    const v = await verify.verify(inv);
-    if (cfg.invoice.verify.requireVerify && !v.authentic) {
-      return {
-        ...filled,
-        status: S.verifyFailed,
-        note: `发票验真未通过：${v.message}（状态：${v.invoiceStatus}）`,
-      };
-    }
-    filled.note = `验真通过：${v.invoiceStatus}`;
-  } catch (e) {
-    logger.error('验真失败', e.message);
-    return {
-      ...filled,
-      status: S.verifyFailed,
-      note: `发票验真调用失败：${e.message}`,
-    };
-  }
-
-  // 3) 去重（与历史已报销记录比对）
+  // 2) 去重（先查重：命中即拦截，省去后续验真调用）
   let historyEntries = [];
   try {
     const dedupCfg = cfg.invoice.dedup;
@@ -129,7 +110,7 @@ async function runInvoiceGuard(params, deps) {
     logger.error('查询历史记录失败', e.message);
     return {
       ...filled,
-      status: S.verifyFailed,
+      status: S.duplicateInvoice,
       note: `去重查询失败，暂不能提交：${e.message}`,
     };
   }
@@ -160,12 +141,33 @@ async function runInvoiceGuard(params, deps) {
     };
   }
 
+  // 3) 验真（不重复才验真，真正查验一次，查验次数 +1）
+  filled.verifyCount = priorCount + 1;
+  try {
+    const v = await verify.verify(inv);
+    if (cfg.invoice.verify.requireVerify && !v.authentic) {
+      return {
+        ...filled,
+        status: S.verifyFailed,
+        note: `未发现重复；但发票验真未通过：${v.message}（状态：${v.invoiceStatus}）`,
+      };
+    }
+    filled.note = `未发现重复；验真通过：${v.invoiceStatus}`;
+  } catch (e) {
+    logger.error('验真失败', e.message);
+    return {
+      ...filled,
+      status: S.verifyFailed,
+      note: `未发现重复；但发票验真调用失败：${e.message}`,
+    };
+  }
+
   // 4) 全部通过
   return {
     ...filled,
     ok: true,
     status: cfg.statusValues.verified,
-    note: `${filled.note}；未发现重复，可提交`,
+    note: `${filled.note}，可提交`,
   };
 }
 
