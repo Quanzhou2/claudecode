@@ -1,0 +1,77 @@
+{
+  "$comment": "简道云自建插件声明。对应「插件管理 >> 新建自建插件」里的函数、请求参数声明、返回参数声明。两个函数均为『后端函数』(nodejs)，另配两个『前端扩展』用于消息提示与阻止提交。",
+  "name": "reimbursement-invoice-guard",
+  "title": "费用报销发票/凭证防重插件",
+  "version": "1.0.0",
+  "vendor": "自建",
+  "functions": [
+    {
+      "key": "invoiceRecognizeVerifyDedup",
+      "title": "发票识别·验真·去重",
+      "type": "backend",
+      "runtime": "nodejs",
+      "entry": "src/invoice/invoiceBackend.js",
+      "description": "对上传的发票图片做 OCR 识别，提取发票号码等信息，做真伪查验，并与历史已报销发票号码去重。",
+      "requestParams": [
+        { "name": "imageUrl",  "type": "any", "required": true,  "desc": "发票图片可访问 URL（前端事件里绑定『发票』字段的文件地址）" },
+        { "name": "dataId",    "type": "any", "required": false, "desc": "当前报销单 dataId，编辑时用于排除自身" },
+        { "name": "rowId",     "type": "any", "required": false, "desc": "子表单当前行 id，便于前端定位回填" }
+      ],
+      "returnParams": [
+        { "name": "ok",            "type": "any", "desc": "本行发票是否通过（true=可提交）" },
+        { "name": "status",        "type": "any", "desc": "状态枚举：验证通过/发票重复/验真失败/识别失败" },
+        { "name": "invoiceType",   "type": "any", "desc": "发票类型" },
+        { "name": "invoiceCode",   "type": "any", "desc": "发票代码" },
+        { "name": "invoiceNumber", "type": "any", "desc": "发票号码" },
+        { "name": "invoiceDate",   "type": "any", "desc": "票据日期" },
+        { "name": "invoiceAmount", "type": "any", "desc": "发票金额（不含税）" },
+        { "name": "taxAmount",     "type": "any", "desc": "税额" },
+        { "name": "amountWithTax", "type": "any", "desc": "价税合计" },
+        { "name": "checkCode",     "type": "any", "desc": "校验码" },
+        { "name": "sellerTaxNo",   "type": "any", "desc": "销方税号" },
+        { "name": "verifyCount",   "type": "any", "desc": "累计查验次数" },
+        { "name": "note",          "type": "any", "desc": "识别/查验/去重说明，用于回填『识别说明』" },
+        { "name": "duplicate",     "type": "any", "desc": "是否与历史发票重复" },
+        { "name": "matchedRecord", "type": "any", "desc": "命中的历史记录信息（报销单编号/dataId）" }
+      ]
+    },
+    {
+      "key": "voucherSimilarityCheck",
+      "title": "付款凭证图片相似度查重",
+      "type": "backend",
+      "runtime": "nodejs",
+      "entry": "src/similarity/similarityBackend.js",
+      "description": "对上传的付款凭证图片，与历史已报销记录同字段图片做 LLM 相似度分析，超过阈值判为重复。",
+      "requestParams": [
+        { "name": "imageUrl", "type": "any", "required": true,  "desc": "付款凭证图片可访问 URL（前端事件里绑定子表单『附件』字段）" },
+        { "name": "dataId",   "type": "any", "required": false, "desc": "当前报销单 dataId，编辑时用于排除自身" },
+        { "name": "rowId",    "type": "any", "required": false, "desc": "子表单当前行 id" }
+      ],
+      "returnParams": [
+        { "name": "ok",         "type": "any", "desc": "是否通过（true=非重复，可提交）" },
+        { "name": "status",     "type": "any", "desc": "状态枚举：验证通过/凭证重复/识别失败" },
+        { "name": "duplicate",  "type": "any", "desc": "是否判为重复" },
+        { "name": "similarity", "type": "any", "desc": "与历史最相似图片的相似度分值 0~1" },
+        { "name": "threshold",  "type": "any", "desc": "判重阈值" },
+        { "name": "note",       "type": "any", "desc": "相似度说明，用于回填『识别说明』" },
+        { "name": "matchedRecord", "type": "any", "desc": "命中的历史记录信息（报销单编号/dataId/图片）" }
+      ]
+    },
+    {
+      "key": "invoiceGuardFrontend",
+      "title": "发票防重·前端提示",
+      "type": "frontend",
+      "runtime": "browser",
+      "entry": "src/frontend/invoiceFrontend.js",
+      "description": "前端扩展：发票字段变化时调用后端函数，回填结果并在识别/验真/去重失败时弹出提示。"
+    },
+    {
+      "key": "voucherGuardFrontend",
+      "title": "凭证防重·前端提示",
+      "type": "frontend",
+      "runtime": "browser",
+      "entry": "src/frontend/attachmentFrontend.js",
+      "description": "前端扩展：附件字段变化时调用后端函数，命中重复时弹出提示。"
+    }
+  ]
+}

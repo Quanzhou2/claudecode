@@ -1,0 +1,28 @@
+{
+  "name": "jiandaoyun-reimbursement-plugin",
+  "version": "1.0.0",
+  "description": "简道云「费用报销单」自建插件：发票识别验真去重 + 付款凭证图片相似度去重",
+  "license": "MIT",
+  "type": "commonjs",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "node --test \"test/*.test.js\"",
+    "build": "node scripts/build-bundles.js",
+    "lint": "node --check src/index.js"
+  },
+  "keywords": [
+    "jiandaoyun",
+    "简道云",
+    "plugin",
+    "invoice",
+    "ocr",
+    "发票查验",
+    "去重",
+    "image-similarity"
+  ],
+  "engines": {
+    "node": ">=16"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
