@@ -9,7 +9,11 @@
    大模型（LLM）把该图片与历史**已报销**记录同字段的图片做相似度分析，超过阈值判为重复，
    阻止提交。
 
-> 发票的识别与验真方式参考「**重庆猫猫智能科技有限公司**」的发票识别插件（OCR 提取要素 + 税务
+> **识别与图片分析都用多模态大模型（LLM）完成：** 发票识别是把发票图片交给视觉 LLM 直接抽取
+> 要素（不再依赖传统 OCR 接口）；付款凭证查重也是 LLM 图片相似度分析。二者共用同一套通用
+> OpenAI 兼容视觉接口。**真伪查验**是独立的一步——需对接税务查验通道，LLM 无法替代。
+>
+> 发票识别/验真的整体思路参考「**重庆猫猫智能科技有限公司**」的发票识别插件（提取要素 + 税务
 > 通道验真）；**去重逻辑与相似度判重逻辑为本插件自研**（见 `src/invoice/dedup.js`、
 > `src/similarity/`）。
 
@@ -47,7 +51,7 @@
    ┌──────────────────────────────────────────────────────────────┐
    │  子表单：票据录入                                              │
    │   发票(图片) ──前端事件──▶ 后端函数 invoiceRecognizeVerifyDedup │
-   │                              1) OCR 识别   （猫猫式适配器）     │
+   │                              1) 识别       （多模态 LLM 抽取要素）│
    │                              2) 去重       （自研，查历史已报销）│
    │                              3) 发票验真   （税务通道适配器）   │
    │                              └─▶ 回填字段 + 写「状态/识别说明」 │
@@ -106,9 +110,9 @@ jiandaoyun-reimbursement-plugin/
 
 | 服务 | 用途 | 需要的密钥/地址（写入插件环境变量） |
 | --- | --- | --- |
-| 发票 OCR 识别 | 提取发票要素 | `INVOICE_OCR_ENDPOINT` / `INVOICE_OCR_APP_KEY` / `INVOICE_OCR_APP_SECRET` |
-| 发票验真 | 查验真伪 | `INVOICE_VERIFY_ENDPOINT` / `INVOICE_VERIFY_APP_KEY` / `INVOICE_VERIFY_APP_SECRET` |
-| 多模态 LLM | 图片相似度 | `LLM_SIMILARITY_ENDPOINT` / `LLM_SIMILARITY_API_KEY` |
+| 多模态 LLM（发票识别） | 视觉抽取发票要素 | `LLM_OCR_ENDPOINT` / `LLM_OCR_API_KEY`（+ `invoice.ocr.model`） |
+| 多模态 LLM（凭证相似度） | 图片相似度分析 | `LLM_SIMILARITY_ENDPOINT` / `LLM_SIMILARITY_API_KEY` |
+| 发票验真（税务通道） | 查验真伪 | `INVOICE_VERIFY_ENDPOINT` / `INVOICE_VERIFY_APP_KEY` / `INVOICE_VERIFY_APP_SECRET` |
 | 简道云数据接口 | 查询历史记录去重 | `JDY_API_KEY`（开发者后台生成的 API 密钥） |
 
 > 表中的环境变量名对应**模块化源码**（`src/`）。若用 `dist/jdy-paste/*.js` 粘贴安装，这些
@@ -189,8 +193,11 @@ jiandaoyun-reimbursement-plugin/
 > **执行顺序：先查重、再验真。** 重复票直接拦截，无需再消耗一次（付费的）验真调用；
 > 只有确认不重复的发票才去做真伪查验。
 
-1. **OCR 识别**（`ocrClient.js`）：把发票图片 URL 交给识别服务，映射为标准字段
+1. **LLM 识别**（`llmOcrClient.js`）：下载发票图片 → base64 → 通过通用 OpenAI 兼容视觉接口
+   （`POST /chat/completions`）让多模态模型直接抽取字段并以 JSON 返回，再归一化为标准字段
    （发票代码/号码/日期/金额/税额/价税合计/校验码/销方税号）。识别不到号码 → `识别失败`。
+   （如需改回传统 OCR 接口，把 `invoice.ocr.provider` 设为 `maomao`/`baidu` 等即可切换到
+   `ocrClient.js` 适配器。）
 2. **去重（自研，`dedup.js`）**：
    - 调用简道云数据接口，分页拉取**已报销/审批通过**的历史报销单（`invoice.dedup.statusIncludes`
      控制范围，`scanLimit` 控制扫描上限）；
@@ -229,7 +236,8 @@ jiandaoyun-reimbursement-plugin/
 
 | 路径 | 含义 | 默认 |
 | --- | --- | --- |
-| `invoice.ocr.provider` | OCR 服务商适配 | `maomao` |
+| `invoice.ocr.provider` | 发票识别方式 | `llm`（OpenAI 兼容视觉）；可选 `claude`/`maomao`/`baidu`… |
+| `invoice.ocr.model` | 识别用视觉模型 | `gpt-4o` |
 | `invoice.verify.requireVerify` | 是否强制验真 | `true` |
 | `invoice.dedup.statusIncludes` | 参与去重的流程状态 | `["已完成","审批通过","已报销"]` |
 | `invoice.dedup.scanLimit` | 去重最多扫描历史条数 | `5000` |

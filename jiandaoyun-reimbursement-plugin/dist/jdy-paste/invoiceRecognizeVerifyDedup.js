@@ -46,12 +46,12 @@ var CONFIG = {
     pageSize: 100,
     excludeSelf: true
   },
-  // 发票 OCR 识别服务（参考猫猫发票识别；填你所用服务的地址与鉴权）
+  // 发票识别：多模态 LLM（OpenAI 兼容视觉接口）直接从图片抽取要素
   ocr: {
-    endpoint: 'FILL_OCR识别接口地址',
-    appKey: 'FILL_OCR_AppKey',
-    appSecret: 'FILL_OCR_AppSecret',
-    timeoutMs: 15000
+    endpoint: 'https://api.openai.com/v1/chat/completions', // 可指向任意 OpenAI 兼容服务
+    apiKey: 'FILL_LLM_OCR_APIKey',
+    model: 'gpt-4o',
+    timeoutMs: 20000
   },
   // 发票验真服务
   verify: {
@@ -145,11 +145,41 @@ async function runInvoiceGuard(p) {
   return Object.assign(filled, { ok: true, status: S.verified, note: filled.note + '，可提交' });
 }
 
-// ---------------- OCR / 验真 ----------------
+// ---------------- OCR（多模态 LLM）/ 验真 ----------------
+var OCR_PROMPT = '你是发票识别助手。请从这张发票图片中提取关键信息，只输出一个 JSON，不要解释、不要代码块围栏。' +
+  '字段（识别不到就留空字符串或 null）：{"invoiceType":"发票类型","invoiceCode":"发票代码",' +
+  '"invoiceNumber":"发票号码","invoiceDate":"开票日期(YYYY-MM-DD)","invoiceAmount":不含税金额数字,' +
+  '"taxAmount":税额数字,"amountWithTax":价税合计数字,"checkCode":"校验码","sellerTaxNo":"销方税号"}';
+
 async function ocrRecognize(imageUrl) {
-  if (!CONFIG.ocr.endpoint || CONFIG.ocr.endpoint.indexOf('FILL_') === 0) throw new Error('未配置 OCR 识别接口地址');
-  var raw = await httpPostJson(CONFIG.ocr.endpoint, { imageUrl: imageUrl, url: imageUrl }, ocrHeaders(CONFIG.ocr), CONFIG.ocr.timeoutMs);
-  return mapOcr(raw);
+  var c = CONFIG.ocr;
+  if (!c.apiKey || c.apiKey.indexOf('FILL_') === 0) throw new Error('未配置 LLM OCR 密钥');
+  var img = await fetchImageBase64(imageUrl, c.timeoutMs);
+  var content = [
+    { type: 'text', text: OCR_PROMPT },
+    { type: 'image_url', image_url: { url: 'data:' + img.mediaType + ';base64,' + img.base64 } }
+  ];
+  var body = { model: c.model, max_tokens: 800, temperature: 0, messages: [{ role: 'user', content: content }] };
+  var raw = await httpPostJson(c.endpoint || 'https://api.openai.com/v1/chat/completions', body,
+    { 'Content-Type': 'application/json', Authorization: 'Bearer ' + c.apiKey }, c.timeoutMs);
+  var text = (raw && raw.choices && raw.choices[0] && raw.choices[0].message && raw.choices[0].message.content) || '';
+  var m = String(text).match(/\{[\s\S]*\}/);
+  var obj = {};
+  if (m) { try { obj = JSON.parse(m[0]); } catch (e) { obj = {}; } }
+  return mapOcr(obj);
+}
+async function fetchImageBase64(url, timeoutMs) {
+  var mt = /\.png/i.test(url) ? 'image/png' : (/\.webp/i.test(url) ? 'image/webp' : 'image/jpeg');
+  var buf;
+  if (typeof fetch === 'function') {
+    var res = await fetch(url); if (!res.ok) throw new Error('HTTP ' + res.status);
+    buf = Buffer.from(await res.arrayBuffer());
+  } else {
+    var axios = require('axios');
+    var r = await axios({ url: url, method: 'GET', responseType: 'arraybuffer', timeout: timeoutMs });
+    buf = Buffer.from(r.data);
+  }
+  return { base64: buf.toString('base64'), mediaType: mt };
 }
 function ocrHeaders(c) {
   var h = { 'Content-Type': 'application/json' };

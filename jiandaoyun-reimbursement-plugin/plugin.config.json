@@ -51,12 +51,14 @@
 
   "invoice": {
     "ocr": {
-      "$comment": "发票 OCR 识别提供方（参考重庆猫猫智能科技有限公司发票识别插件的识别方式，做成可插拔适配器）。provider 取值：maomao | baidu | tencent | huawei | custom。",
-      "provider": "maomao",
-      "endpointEnv": "INVOICE_OCR_ENDPOINT",
+      "$comment": "发票识别：默认用多模态 LLM（OpenAI 兼容视觉接口）直接从图片抽取发票要素。provider 取值：llm(默认，openai-compatible) | claude | maomao|baidu|tencent|huawei|custom(旧的第三方OCR接口)。llm 模式用 endpoint/apiKey/model；旧模式用 endpoint/appKey/appSecret。",
+      "provider": "llm",
+      "endpointEnv": "LLM_OCR_ENDPOINT",
+      "apiKeyEnv": "LLM_OCR_API_KEY",
+      "model": "gpt-4o",
       "appKeyEnv": "INVOICE_OCR_APP_KEY",
       "appSecretEnv": "INVOICE_OCR_APP_SECRET",
-      "timeoutMs": 15000
+      "timeoutMs": 20000
     },
     "verify": {
       "$comment": "发票查验（验真）提供方，校验发票号码真伪与状态。provider：maomao | nuonuo | baiwang | custom。",

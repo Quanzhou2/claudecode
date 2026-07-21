@@ -19,6 +19,7 @@
 =====================================================================
 """
 
+import base64
 import json
 import re
 
@@ -50,11 +51,11 @@ CONFIG = {
         "pageSize": 100,
         "excludeSelf": True,
     },
-    "ocr": {
-        "endpoint": "FILL_OCR识别接口地址",
-        "appKey": "FILL_OCR_AppKey",
-        "appSecret": "FILL_OCR_AppSecret",
-        "timeoutMs": 15000,
+    "ocr": {  # 发票识别：多模态 LLM（OpenAI 兼容视觉接口）直接从图片抽取要素
+        "endpoint": "https://api.openai.com/v1/chat/completions",  # 可指向任意 OpenAI 兼容服务
+        "apiKey": "FILL_LLM_OCR_APIKey",
+        "model": "gpt-4o",
+        "timeoutMs": 20000,
     },
     "verify": {
         "requireVerify": True,
@@ -143,14 +144,55 @@ def run_invoice_guard(image_url, data_id=None, row_id=None, prior_verify_count=0
     return _merge(filled, ok=True, status=S["verified"], note=filled["note"] + "，可提交")
 
 
-# ---------------- OCR / 验真 ----------------
+# ---------------- OCR（多模态 LLM）/ 验真 ----------------
+OCR_PROMPT = (
+    "你是发票识别助手。请从这张发票图片中提取关键信息，只输出一个 JSON，不要解释、不要代码块围栏。"
+    "字段（识别不到就留空字符串或 null）："
+    '{"invoiceType":"发票类型","invoiceCode":"发票代码","invoiceNumber":"发票号码",'
+    '"invoiceDate":"开票日期(YYYY-MM-DD)","invoiceAmount":不含税金额数字,"taxAmount":税额数字,'
+    '"amountWithTax":价税合计数字,"checkCode":"校验码","sellerTaxNo":"销方税号"}'
+)
+
+
 def ocr_recognize(image_url):
     c = CONFIG["ocr"]
-    if not c["endpoint"] or c["endpoint"].startswith("FILL_"):
-        raise RuntimeError("未配置 OCR 识别接口地址")
-    raw = http_post_json(c["endpoint"], {"imageUrl": image_url, "url": image_url},
-                         _svc_headers(c), c["timeoutMs"])
-    return map_ocr(raw)
+    if not c.get("apiKey") or c["apiKey"].startswith("FILL_"):
+        raise RuntimeError("未配置 LLM OCR 密钥")
+    img = fetch_image(image_url, c["timeoutMs"])
+    content = [
+        {"type": "text", "text": OCR_PROMPT},
+        {"type": "image_url", "image_url": {"url": "data:%s;base64,%s" % (img["mediaType"], img["base64"])}},
+    ]
+    body = {"model": c["model"], "max_tokens": 800, "temperature": 0,
+            "messages": [{"role": "user", "content": content}]}
+    headers = {"Content-Type": "application/json", "Authorization": "Bearer " + c["apiKey"]}
+    raw = http_post_json(c["endpoint"] or "https://api.openai.com/v1/chat/completions", body, headers, c["timeoutMs"])
+    text = ""
+    try:
+        text = raw["choices"][0]["message"]["content"]
+    except Exception:
+        text = ""
+    m = re.search(r"\{[\s\S]*\}", str(text))
+    obj = {}
+    if m:
+        try:
+            obj = json.loads(m.group(0))
+        except Exception:
+            obj = {}
+    return map_ocr(obj)
+
+
+def fetch_image(url, timeout_ms=20000):
+    mt = "image/png" if ".png" in url.lower() else ("image/webp" if ".webp" in url.lower() else "image/jpeg")
+    if _requests is not None:
+        resp = _requests.get(url, timeout=(timeout_ms or 20000) / 1000.0)
+        if not (200 <= resp.status_code < 300):
+            raise RuntimeError("HTTP %s" % resp.status_code)
+        data = resp.content
+    else:
+        with urllib.request.urlopen(url, timeout=(timeout_ms or 20000) / 1000.0) as r:  # noqa: S310
+            data = r.read()
+    return {"base64": base64.b64encode(data).decode("ascii"), "mediaType": mt}
 
 
 def _svc_headers(c):

@@ -15,6 +15,7 @@ const { getConfig } = require('../shared/config');
 const { createHttpClient } = require('../shared/httpClient');
 const { createLogger } = require('../shared/logger');
 const { createOcrClient } = require('./ocrClient');
+const { createLlmOcrClient } = require('./llmOcrClient');
 const { createVerifyClient } = require('./verifyClient');
 const { dedupInvoice } = require('./dedup');
 const {
@@ -176,7 +177,11 @@ async function main(params, _context) {
   const cfg = getConfig();
   const logger = createLogger(cfg.runtime.logLevel);
   const http = createHttpClient({ timeoutMs: 15000 });
-  const ocr = createOcrClient(cfg.invoice.ocr, http, logger);
+  // 发票识别：默认多模态 LLM（llm/claude）；旧的第三方 OCR 接口按 provider 回退
+  const ocrProvider = cfg.invoice.ocr.provider;
+  const ocr = (ocrProvider === 'llm' || ocrProvider === 'claude')
+    ? createLlmOcrClient(cfg.invoice.ocr, http, logger)
+    : createOcrClient(cfg.invoice.ocr, http, logger);
   const verify = createVerifyClient(cfg.invoice.verify, http, logger);
   const dataClient = createJdyDataClient(cfg, http);
   return runInvoiceGuard(params, { cfg, ocr, verify, dataClient, logger });

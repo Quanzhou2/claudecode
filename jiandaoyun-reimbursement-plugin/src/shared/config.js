@@ -61,6 +61,7 @@ function getConfig(opts = {}) {
       ocr: {
         ...raw.invoice.ocr,
         endpoint: readEnv(raw.invoice.ocr.endpointEnv, ''),
+        apiKey: readEnv(raw.invoice.ocr.apiKeyEnv, ''),
         appKey: readEnv(raw.invoice.ocr.appKeyEnv, ''),
         appSecret: readEnv(raw.invoice.ocr.appSecretEnv, ''),
       },

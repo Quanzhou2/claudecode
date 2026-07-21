@@ -20,6 +20,7 @@ module.exports = {
   normalize: require('./shared/normalize'),
   // 适配器 / 客户端
   ocrClient: require('./invoice/ocrClient'),
+  llmOcrClient: require('./invoice/llmOcrClient'),
   verifyClient: require('./invoice/verifyClient'),
   llmSimilarityClient: require('./similarity/llmSimilarityClient'),
   jdyDataClient: require('./shared/jdyDataClient'),
