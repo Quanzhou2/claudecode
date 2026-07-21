@@ -74,7 +74,11 @@
 
 ```
 jiandaoyun-reimbursement-plugin/
-├── dist/jdy-paste/             # ★ 直接粘贴进简道云的「方法体」代码（安装用这个）
+├── python/                     # ★ 后端函数 Python 版（粘进「后端函数 / Python」）
+│  ├── invoice_recognize_verify_dedup.py
+│  ├── voucher_similarity_check.py
+│  └── tests/                   # Python 单测（unittest，无需联网）
+├── dist/jdy-paste/             # ★ 后端函数 JS 版「方法体」（粘进「后端函数 / JS」）
 │  ├── invoiceRecognizeVerifyDedup.js   # 后端函数：发票识别·去重·验真
 │  └── voucherSimilarityCheck.js        # 后端函数：付款凭证相似度查重
 ├── manifest/plugin.manifest.json  # 每个函数的入参/出参声明清单（照着在 UI 里填）
@@ -116,21 +120,23 @@ jiandaoyun-reimbursement-plugin/
 
 ### 2. 新建自建插件并粘贴函数代码（不是导入 zip）
 
-在「开放平台 → 插件管理 → **新建自建插件**」里新建插件，然后**新建函数**，逐个粘贴：
+在「开放平台 → 插件管理 → **新建自建插件**」里新建插件，然后**新建函数**，逐个粘贴。
+后端函数可选 **Python** 或 **JS**，二选一即可（逻辑一致）：
 
-| 函数 key | 类型 | 粘贴哪段代码 |
+| 函数 key | Python（推荐） | JS |
 | --- | --- | --- |
-| `invoiceRecognizeVerifyDedup` | 后端函数 | `dist/jdy-paste/invoiceRecognizeVerifyDedup.js` 里「方法体开始～结束」整段 |
-| `voucherSimilarityCheck` | 后端函数 | `dist/jdy-paste/voucherSimilarityCheck.js` 里「方法体开始～结束」整段 |
+| `invoiceRecognizeVerifyDedup` | `python/invoice_recognize_verify_dedup.py` | `dist/jdy-paste/invoiceRecognizeVerifyDedup.js` |
+| `voucherSimilarityCheck` | `python/voucher_similarity_check.py` | `dist/jdy-paste/voucherSimilarityCheck.js` |
 
 要点：
 
-1. 简道云函数代码是**方法体**——不要加 `module.exports`、不要 `require` 本地文件（`dist/jdy-paste`
-   里的代码已按此写好，所有逻辑自包含，只用 `params` 入参与运行时的 `fetch`/`axios`）。
+1. Python 版入口是 `main(params, context)`，整段粘贴即可；JS 版是**方法体**——不要加
+   `module.exports`、不要 `require` 本地文件。两种版本逻辑都自包含，只用入参 `params` 与运行时
+   HTTP（Python：`requests`/`urllib`；JS：`fetch`/`axios`）。
 2. 每个函数按 `manifest/plugin.manifest.json` 里的 `requestParams` / `returnParams` 逐项填写
    **入参声明**与**出参声明**（示例见 `examples/io-samples.json`）。
-3. 各服务地址/密钥、表单字段 widget id 直接改每个 `dist/jdy-paste/*.js` 顶部的 `CONFIG`
-   （把 `FILL_*` 替换成真实值）。密钥更推荐走插件的「身份验证/通用参数」，再在 `CONFIG` 里读
+3. 各服务地址/密钥、表单字段 widget id 直接改所选文件顶部的 `CONFIG`（Python 在 `python/*.py`、
+   JS 在 `dist/jdy-paste/*.js`，把 `FILL_*` 替换成真实值）。密钥更推荐走插件的「身份验证/通用参数」，再在 `CONFIG` 里读
    对应入参。
 4. 建议先点函数编辑器的**插件调试**跑通，再接前端事件。
 
