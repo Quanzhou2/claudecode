@@ -74,17 +74,25 @@
 
 ```
 jiandaoyun-reimbursement-plugin/
-├── plugin.config.json          # 运行配置：字段映射 / 阈值 / 服务商 / 去重范围
-├── manifest/plugin.manifest.json  # 插件与函数声明（请求参数 / 返回参数）
-├── src/
+├── dist/jdy-paste/             # ★ 直接粘贴进简道云的「方法体」代码（安装用这个）
+│  ├── invoiceRecognizeVerifyDedup.js   # 后端函数：发票识别·去重·验真
+│  └── voucherSimilarityCheck.js        # 后端函数：付款凭证相似度查重
+├── manifest/plugin.manifest.json  # 每个函数的入参/出参声明清单（照着在 UI 里填）
+├── plugin.config.json          # 配置样板：字段映射 / 阈值 / 去重范围（值同时内嵌在 jdy-paste 顶部 CONFIG）
+├── src/                        # 可维护的模块化源码（含单测，供本地开发/改逻辑）
 │  ├── shared/                  # 通用：配置、日志、HTTP、简道云数据接口、记录抽取、归一化
 │  ├── invoice/                 # 功能一：ocrClient / verifyClient / dedup(自研) / invoiceBackend
 │  ├── similarity/              # 功能二：imageHash / similarity(自研) / llmSimilarityClient / similarityBackend
 │  └── frontend/                # 前端扩展 + 提交校验判定
-├── dist/                       # 打包后的单文件（可直接粘贴进简道云代码框）
+├── dist/*.bundle.js            # Node 可 require 的打包版（供本地联调，非简道云粘贴用）
 ├── scripts/build-bundles.js    # 打包脚本
 └── test/                       # 单元 + 集成测试（node:test，无需联网）
 ```
+
+> ⚠️ **不要直接把本仓库压缩成 zip 导入简道云。** 简道云「导入插件」只认它自己**导出**的插件
+> 包（有固定内部结构与校验），手工拼的 zip 会被判为“损坏/无效”。请按下面第 2 步在界面里
+> **新建插件 + 新建函数 + 粘贴方法体代码**。等你把插件建好后，用简道云自带的「导出」即可得到
+> 可再分发/再导入的合法 zip。
 
 ---
 
@@ -99,24 +107,35 @@ jiandaoyun-reimbursement-plugin/
 | 多模态 LLM | 图片相似度 | `LLM_SIMILARITY_ENDPOINT` / `LLM_SIMILARITY_API_KEY` |
 | 简道云数据接口 | 查询历史记录去重 | `JDY_API_KEY`（开发者后台生成的 API 密钥） |
 
+> 表中的环境变量名对应**模块化源码**（`src/`）。若用 `dist/jdy-paste/*.js` 粘贴安装，这些
+> 地址/密钥直接填在该文件顶部的 `CONFIG` 块里即可。
+>
 > OCR/验真也可直接复用简道云插件中心已有的「发票识别插件 / 发票验真插件」（猫猫等厂商），
 > 此时把 `provider` 设为对应厂商，并按其文档调整 `ocrClient.buildRequest` / `mapOcrResult`
 > 的请求体与字段映射即可——映射层已兼容百度/腾讯/华为/通用中文键等多种返回结构。
 
-### 2. 新建自建插件并导入函数
+### 2. 新建自建插件并粘贴函数代码（不是导入 zip）
 
-在「开放平台 → 插件管理 → 新建自建插件」中创建 4 个函数（声明见
-`manifest/plugin.manifest.json`）：
+在「开放平台 → 插件管理 → **新建自建插件**」里新建插件，然后**新建函数**，逐个粘贴：
 
-| 函数 key | 类型 | 代码来源 |
+| 函数 key | 类型 | 粘贴哪段代码 |
 | --- | --- | --- |
-| `invoiceRecognizeVerifyDedup` | 后端函数 | 粘贴 `dist/invoiceBackend.bundle.js` |
-| `voucherSimilarityCheck` | 后端函数 | 粘贴 `dist/similarityBackend.bundle.js` |
-| `invoiceGuardFrontend` | 前端扩展 | 粘贴 `dist/invoiceFrontend.bundle.js` |
-| `voucherGuardFrontend` | 前端扩展 | 粘贴 `dist/attachmentFrontend.bundle.js` |
+| `invoiceRecognizeVerifyDedup` | 后端函数 | `dist/jdy-paste/invoiceRecognizeVerifyDedup.js` 里「方法体开始～结束」整段 |
+| `voucherSimilarityCheck` | 后端函数 | `dist/jdy-paste/voucherSimilarityCheck.js` 里「方法体开始～结束」整段 |
 
-按 manifest 里的 `requestParams` / `returnParams` 逐项填写每个函数的**请求参数声明**与
-**返回参数声明**。
+要点：
+
+1. 简道云函数代码是**方法体**——不要加 `module.exports`、不要 `require` 本地文件（`dist/jdy-paste`
+   里的代码已按此写好，所有逻辑自包含，只用 `params` 入参与运行时的 `fetch`/`axios`）。
+2. 每个函数按 `manifest/plugin.manifest.json` 里的 `requestParams` / `returnParams` 逐项填写
+   **入参声明**与**出参声明**（示例见 `examples/io-samples.json`）。
+3. 各服务地址/密钥、表单字段 widget id 直接改每个 `dist/jdy-paste/*.js` 顶部的 `CONFIG`
+   （把 `FILL_*` 替换成真实值）。密钥更推荐走插件的「身份验证/通用参数」，再在 `CONFIG` 里读
+   对应入参。
+4. 建议先点函数编辑器的**插件调试**跑通，再接前端事件。
+
+> 前端提示（可选）：若还想在上传瞬间弹出成功/失败提示，可再建两个「前端扩展」函数，逻辑见
+> `src/frontend/`；不建也行——最终的提交拦截由第 5 步「表单提交校验」保证。
 
 ### 3. 填写字段映射
 
