@@ -1,0 +1,63 @@
+{
+  "$comment": "两个后端函数的请求/返回示例，便于在简道云『字段存储关系』里把返回值映射到子表单字段。",
+
+  "invoiceRecognizeVerifyDedup": {
+    "request": {
+      "imageUrl": "https://fs.jiandaoyun.com/xxx/invoice_001.jpg",
+      "dataId": "665f0a1b2c3d4e5f60718293",
+      "rowId": "row_abc",
+      "priorVerifyCount": 0
+    },
+    "return_pass": {
+      "ok": true,
+      "status": "验证通过",
+      "invoiceType": "增值税专用发票",
+      "invoiceCode": "011002000111",
+      "invoiceNumber": "12345678",
+      "invoiceDate": "2024-01-31",
+      "invoiceAmount": 1000,
+      "taxAmount": 130,
+      "amountWithTax": 1130,
+      "checkCode": "1234",
+      "sellerTaxNo": "91500000MA5XXXXX0X",
+      "verifyCount": 1,
+      "note": "验真通过：正常；未发现重复，可提交",
+      "duplicate": false,
+      "matchedRecord": null
+    },
+    "return_duplicate": {
+      "ok": false,
+      "status": "发票重复",
+      "invoiceNumber": "12345678",
+      "duplicate": true,
+      "matchedRecord": { "dataId": "6610...", "recordNo": "BX-2024-001", "rowId": "row_x" },
+      "note": "发票重复：号码 12345678 已在历史报销单「BX-2024-001」中报销过，不能重复提交"
+    }
+  },
+
+  "voucherSimilarityCheck": {
+    "request": {
+      "imageUrl": "https://fs.jiandaoyun.com/xxx/voucher_001.jpg",
+      "dataId": "665f0a1b2c3d4e5f60718293",
+      "rowId": "row_abc"
+    },
+    "return_pass": {
+      "ok": true,
+      "status": "验证通过",
+      "duplicate": false,
+      "similarity": 0.42,
+      "threshold": 0.9,
+      "note": "未发现重复凭证（最高相似度 42% < 阈值 90%）",
+      "matchedRecord": null
+    },
+    "return_duplicate": {
+      "ok": false,
+      "status": "凭证重复",
+      "duplicate": true,
+      "similarity": 0.96,
+      "threshold": 0.9,
+      "note": "付款凭证疑似重复（相似度 96% ≥ 阈值 90%），命中历史报销单「BX-2024-007」：金额、流水号、收款方一致",
+      "matchedRecord": { "dataId": "6620...", "recordNo": "BX-2024-007", "rowId": "row_y", "imageUrl": "https://fs.jiandaoyun.com/yyy/voucher_prev.jpg" }
+    }
+  }
+}
