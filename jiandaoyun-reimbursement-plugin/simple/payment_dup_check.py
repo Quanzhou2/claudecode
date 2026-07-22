@@ -69,15 +69,26 @@ def compare(new_b64, mt, batch):
     content.append({"type": "image_url", "image_url": {"url": "data:%s;base64,%s" % (mt, new_b64)}})
     for h in batch:
         content.append({"type": "image_url", "image_url": {"url": "data:%s;base64,%s" % (h[1], h[0])}})
-    body = {"model": CONF["llm_model"], "temperature": 0, "max_tokens": 10,
+    # MiMo 是推理模型，max_tokens 太小会被“思考”耗光导致 content 为空，这里给足余量
+    body = {"model": CONF["llm_model"], "temperature": 0, "max_tokens": 1024,
             "messages": [{"role": "user", "content": content}]}
     data = post_json(CONF["llm_url"], body, llm_headers())
-    try:
-        text = data["choices"][0]["message"]["content"]
-    except Exception:
-        text = ""
-    m = re.search(r"[01](?:\.\d+)?", str(text))
+    text = answer_text(data)
+    m = re.search(r"[01](?:\.\d+)?", text)
     return max(0.0, min(1.0, float(m.group(0)))) if m else 0.0
+
+
+def answer_text(data):
+    """从（可能带推理的）OpenAI 兼容返回里取出最终回答文本。"""
+    try:
+        msg = data["choices"][0]["message"]
+    except Exception:
+        return ""
+    c = msg.get("content")
+    if isinstance(c, list):
+        c = "".join(p.get("text", "") for p in c if isinstance(p, dict))
+    text = c or msg.get("reasoning_content") or ""
+    return re.sub(r"<think>[\s\S]*?</think>", "", text, flags=re.I).strip()
 
 
 def history_images(self_id):

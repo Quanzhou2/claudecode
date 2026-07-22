@@ -41,9 +41,10 @@ def main(params, context=None):
     if not image_url:
         return {"duplicated": False, "invoiceNumber": "", "message": "未上传发票图片"}
 
-    number = read_invoice_number(image_url)
+    number, raw = read_invoice_number(image_url)
     if not number:
-        return {"duplicated": False, "invoiceNumber": "", "message": "未识别到发票号码"}
+        return {"duplicated": False, "invoiceNumber": "",
+                "message": "未识别到发票号码；模型返回：%s" % (raw[:150] or "(空，可能被推理耗光token或模型看不了图)")}
 
     if number in history_numbers(p.get("dataId")):
         return {"duplicated": True, "invoiceNumber": number,
@@ -52,22 +53,33 @@ def main(params, context=None):
 
 
 def read_invoice_number(image_url):
-    """用多模态 LLM 从发票图片里读出发票号码。"""
+    """用多模态 LLM 从发票图片里读出发票号码。返回 (号码, 模型原始文本)。"""
     b64, mt = download_b64(image_url)
     content = [
         {"type": "text", "text": "识别这张发票的发票号码，只输出号码本身，不要任何其它文字。"},
         {"type": "image_url", "image_url": {"url": "data:%s;base64,%s" % (mt, b64)}},
     ]
-    body = {"model": CONF["llm_model"], "temperature": 0, "max_tokens": 50,
+    # MiMo 是推理模型，max_tokens 太小会被“思考”耗光导致 content 为空，这里给足余量
+    body = {"model": CONF["llm_model"], "temperature": 0, "max_tokens": 1024,
             "messages": [{"role": "user", "content": content}]}
     data = post_json(CONF["llm_url"], body, llm_headers())
-    try:
-        text = data["choices"][0]["message"]["content"]
-    except Exception:
-        text = ""
-    joined = re.sub(r"[\s\-_.]", "", str(text))         # 先去掉空格/连字符，避免号码被拆断
+    text = answer_text(data)
+    joined = re.sub(r"[\s\-_.]", "", text)              # 去掉空格/连字符，避免号码被拆断
     nums = re.findall(r"[0-9A-Za-z]{6,}", joined)        # 发票号码是 8 位或数电 20 位
-    return max(nums, key=len).upper() if nums else ""
+    return (max(nums, key=len).upper() if nums else ""), text
+
+
+def answer_text(data):
+    """从（可能带推理的）OpenAI 兼容返回里取出最终回答文本。"""
+    try:
+        msg = data["choices"][0]["message"]
+    except Exception:
+        return ""
+    c = msg.get("content")
+    if isinstance(c, list):   # 多模态返回可能是分段列表
+        c = "".join(p.get("text", "") for p in c if isinstance(p, dict))
+    text = c or msg.get("reasoning_content") or ""       # content 为空时兜底看 reasoning
+    return re.sub(r"<think>[\s\S]*?</think>", "", text, flags=re.I).strip()
 
 
 def history_numbers(self_id):
