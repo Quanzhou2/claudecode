@@ -37,4 +37,22 @@
 - 单文件自包含，只依赖 `requests`（无则回退标准库 `urllib`），无需 `pip install`。
 - 阈值在 `payment_dup_check.py` 的 `CONF["threshold"]`（默认 0.9），比对张数上限 `max_compare`。
 
+## 排错
+
+- **404 报错**：多半是「模型名不对/账号没这个模型」，而不是地址错。函数已把服务器返回体带出来，
+  看报错里的 message 即可（如 `model not found`）。到 platform.xiaomimimo.com 控制台核对你有权限
+  的模型名（可能是 `mimo-v2.5`、`mimo-v2-omni` 等），改 `CONF["llm_model"]`。
+- **鉴权**：MiMo 用 `api-key` 请求头（函数已同时带 `api-key` 和 `Authorization: Bearer`）。
+- **先单测模型**：接进简道云前，先用一张图跑通模型（下方 curl），确认地址/密钥/模型名/看图能力都 OK。
+
+```bash
+curl -sS -X POST https://api.xiaomimimo.com/v1/chat/completions \
+  -H "api-key: $MIMO_API_KEY" -H "Content-Type: application/json" \
+  -d '{"model":"mimo-v2.5-pro","messages":[{"role":"user","content":[
+       {"type":"text","text":"这张图里是什么？"},
+       {"type":"image_url","image_url":{"url":"https://<一张可访问的图片>"}}]}]}'
+```
+
+若 404 提示模型不存在，就换控制台里列出的模型名；若返回说看不了图，就换**多模态**版本。
+
 > 需要发票验真、流程状态过滤、感知哈希预筛、JS 版等更完整能力，见仓库上层的完整实现。

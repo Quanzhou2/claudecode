@@ -12,6 +12,7 @@
 
 import json
 import re
+import urllib.error
 import urllib.request
 
 try:
@@ -70,7 +71,7 @@ def compare(new_b64, mt, batch):
         content.append({"type": "image_url", "image_url": {"url": "data:%s;base64,%s" % (h[1], h[0])}})
     body = {"model": CONF["llm_model"], "temperature": 0, "max_tokens": 10,
             "messages": [{"role": "user", "content": content}]}
-    data = post_json(CONF["llm_url"], body, {"Authorization": "Bearer " + CONF["llm_key"]})
+    data = post_json(CONF["llm_url"], body, llm_headers())
     try:
         text = data["choices"][0]["message"]["content"]
     except Exception:
@@ -124,6 +125,11 @@ def file_urls(v):
 
 
 # ---------- HTTP（requests 优先，回退 urllib）----------
+def llm_headers():
+    # 小米 MiMo 用 api-key 头；同时带上 Authorization: Bearer 以兼容其它网关
+    return {"api-key": CONF["llm_key"], "Authorization": "Bearer " + CONF["llm_key"]}
+
+
 def download_b64(url):
     import base64
     mt = "image/png" if ".png" in url.lower() else ("image/webp" if ".webp" in url.lower() else "image/jpeg")
@@ -143,8 +149,13 @@ def post_json(url, body, headers):
     data = json.dumps(body).encode("utf-8")
     if _rq is not None:
         r = _rq.post(url, data=data, headers=headers, timeout=30)
-        r.raise_for_status()
+        if not (200 <= r.status_code < 300):
+            # 把服务器返回体带出来，才能看到 404 到底是“模型不存在”还是“路径不对”等
+            raise RuntimeError("HTTP %s -> %s" % (r.status_code, (r.text or "")[:500]))
         return r.json()
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")
-    with urllib.request.urlopen(req, timeout=30) as f:  # noqa: S310
-        return json.loads(f.read().decode("utf-8"))
+    try:
+        with urllib.request.urlopen(req, timeout=30) as f:  # noqa: S310
+            return json.loads(f.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        raise RuntimeError("HTTP %s -> %s" % (e.code, e.read().decode("utf-8", "ignore")[:500]))
