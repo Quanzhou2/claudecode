@@ -38,9 +38,9 @@ CONFIG = {
     },
     "dedup": {"statusIncludes": ["已完成", "审批通过", "已报销"], "scanLimit": 5000, "pageSize": 100, "excludeSelf": True},
     "llm": {
-        "endpoint": "https://api.openai.com/v1/chat/completions",  # 可指向任意 OpenAI 兼容服务
-        "apiKey": "FILL_LLM_APIKey",
-        "model": "gpt-4o",
+        "endpoint": "https://api.xiaomimimo.com/v1/chat/completions",  # 小米 MiMo，OpenAI 兼容；须用多模态版本
+        "apiKey": "FILL_MiMo_APIKey",
+        "model": "mimo-v2.5-pro",
         "threshold": 0.9,
         "maxCandidates": 60,
         "batchSize": 8,

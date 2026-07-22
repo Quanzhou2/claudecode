@@ -12,7 +12,10 @@
 1. **建函数**：简道云 → 插件管理 → 新建自建插件 → 新建函数（后端函数 / Python），
    把对应 `.py` 整段粘进去（入口 `main`）。
 2. **填 `CONF`**：把文件顶部的 `FILL_*` 换成真实值——
-   - `llm_key`：OpenAI 兼容视觉服务的密钥（`llm_url`/`llm_model` 可按需改）
+   - `llm_key`：小米 MiMo 密钥（platform.xiaomimimo.com 申请）。默认已配好
+     `llm_url=https://api.xiaomimimo.com/v1/chat/completions`、`llm_model=mimo-v2.5-pro`
+     （OpenAI 兼容）。**两个函数都要把图片发给模型，务必用能看图的多模态 MiMo 版本；
+     若 `mimo-v2.5-pro` 不支持图片输入，改成多模态版如 `mimo-v2-omni`。**
    - `jdy_key`：简道云 API 密钥（需有本表单读取权限）；`app_id`/`entry_id` 已按你的表单预填
    - `sub_widget`：发票信息子表单的 widget id
    - `number_widget`（发票）/ `attach_widget`（凭证）：子表单里对应字段的 widget id

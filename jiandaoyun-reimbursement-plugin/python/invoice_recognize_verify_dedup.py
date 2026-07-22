@@ -51,10 +51,10 @@ CONFIG = {
         "pageSize": 100,
         "excludeSelf": True,
     },
-    "ocr": {  # 发票识别：多模态 LLM（OpenAI 兼容视觉接口）直接从图片抽取要素
-        "endpoint": "https://api.openai.com/v1/chat/completions",  # 可指向任意 OpenAI 兼容服务
-        "apiKey": "FILL_LLM_OCR_APIKey",
-        "model": "gpt-4o",
+    "ocr": {  # 发票识别：多模态 LLM（小米 MiMo，OpenAI 兼容）；须用能看图的多模态版本
+        "endpoint": "https://api.xiaomimimo.com/v1/chat/completions",
+        "apiKey": "FILL_MiMo_APIKey",
+        "model": "mimo-v2.5-pro",
         "timeoutMs": 20000,
     },
     "verify": {

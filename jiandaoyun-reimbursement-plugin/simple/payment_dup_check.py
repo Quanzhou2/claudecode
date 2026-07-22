@@ -21,9 +21,11 @@ except Exception:
 
 # ====== 配置：把 FILL_* 换成你的值 ======
 CONF = {
-    "llm_url": "https://api.openai.com/v1/chat/completions",  # 任意 OpenAI 兼容视觉接口
-    "llm_key": "FILL_LLM_KEY",
-    "llm_model": "gpt-4o",
+    # 小米 MiMo（OpenAI 兼容）。密钥在 platform.xiaomimimo.com 申请。
+    # 注意：本函数要把凭证图片发给模型比相似度，必须用“多模态/能看图”的 MiMo 版本。
+    "llm_url": "https://api.xiaomimimo.com/v1/chat/completions",
+    "llm_key": "FILL_MiMo_APIKey",
+    "llm_model": "mimo-v2.5-pro",   # 按平台上的模型名填，如看图不生效可换多模态版（如 mimo-v2-omni）
     "jdy_key": "FILL_简道云APIKey",
     "app_id": "68ca0e2fb59e070714b68aa0",
     "entry_id": "6899902c9582f683ab885f8d",
